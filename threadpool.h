@@ -5,7 +5,7 @@
 #include <semaphore.h>
 #include <stdlib.h>
 
-#define MAX_THREAD_N 32
+#define INIT_TH_CNT 4
 
 typedef struct tp_task{
 	void*(*f)(void*);
@@ -14,31 +14,26 @@ typedef struct tp_task{
 }tp_task;
 
 typedef struct threadpool{
-	int             size;       // max number of threads
-	int             shutdown;
-	pthread_t*      threads;    // linked list
-	tp_task*        task;
-	pthread_mutex_t mutex;
-	sem_t			sem;
+	int             size;       // num of threads
+	//int             shutdown;	// TODO - 
+
+	pthread_t*      threads;    // 
+	tp_task*        task;		// head of task-linked-list 
+	int 			task_cnt;	//
+
+	pthread_mutex_t mutex;		// 
+	pthread_cond_t	cond;		//
 }threadpool;
 
 typedef threadpool tp;
 
-tp* threadpool_create(){
-	tp* pool = (tp*)malloc(sizeof(tp));
-	threadpool_init(pool);
-}
+tp* threadpool_create();
 int threadpool_init(tp* p);
 int threadpool_addtask(tp* p, tp_task* t);
 int threadpool_destroy(tp* p);
+int threadpool_terminate(tp* p);
 
-tp_task* threadpool_create_task(void*(*f)(void*), void* arg){
-	tp_task* task = (tp_task*)malloc(sizeof(tp_task));
-	task->f = f;
-	task->arg = arg;
-	task->next = NULL;
-	return task;
-}
+tp_task* threadpool_create_tp_task(void*(*f)(void*), void* arg);
 
 
 

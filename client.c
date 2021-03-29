@@ -36,7 +36,7 @@ int main(int argc, char** argv){
     }
 
 
-    char buf[MAX_LEN + 1];
+    char buf[MAX_BUF_LEN + 1];
     
     while(1){
         scanf("%s", buf);
@@ -46,7 +46,7 @@ int main(int argc, char** argv){
             close(client_sock);
             exit(-1);
         }
-        if(recv(client_sock, buf, MAX_LEN, 0) < 0){
+        if(recv(client_sock, buf, MAX_BUF_LEN, 0) < 0){
             printf("ERROR2\n");
             perror("recv");
             close(client_sock);

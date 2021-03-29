@@ -7,52 +7,75 @@
 #include <netinet/in.h>
 #include <errno.h>
 
-#define MAX_LEN 1024
+#include "threadpool.h"
+
+#define MAX_BUF_LEN 1024
+#define PORT 10000
 
 void* accept_request(void* arg);
 void modify_buf(char* buf, int len);
 
-
-int main(int argc, char **argv)
-{
-	int server_sock = socket(PF_INET, SOCK_STREAM, 0);
-	if (server_sock < 0)
-	{
-		perror("socket");
-		close(server_sock);
-		exit(-1);
-	}
-
-	// sockaddr of server socket
+struct sockaddr_in get_sin_server(int port){
+	/* sockaddr of server socket */
 	struct sockaddr_in sin_server;
 	memset(&sin_server, 0, sizeof(sin_server));
 	sin_server.sin_addr.s_addr = htonl(INADDR_ANY);
 	sin_server.sin_family = AF_INET;
-	sin_server.sin_port = htons(10000);
-	int sin_server_len = sizeof(sin_server);
-	// bind server socket
-	bind(server_sock, &sin_server, sizeof(sin_server));
-	// listen
-	if (listen(server_sock, 10) < 0)
+	sin_server.sin_port = htons(port);
+	return sin_server;
+}
+
+int get_sock_server(){
+	int sock_server = socket(PF_INET, SOCK_STREAM, 0);
+	if (sock_server < 0)
 	{
+		perror("socket");
+		close(sock_server);
+		exit(-1);
+	}
+	return sock_server;
+}
+
+struct sockaddr_in get_sin_client(){
+	/* sockaddr of client (any ip & any port) */
+	struct sockaddr_in sin_client;
+	memset(&sin_client, 0, sizeof(sin_client));
+	sin_client.sin_addr.s_addr = htonl(INADDR_ANY);
+	sin_client.sin_family = AF_INET;
+	sin_client.sin_port = htons(0);
+	return sin_client;
+}
+
+int main(int argc, char **argv){
+	/* socket of server */
+	int server_sock = get_sock_server();
+
+	/* sockaddr of server */
+	struct sockaddr_in sin_server = get_sin_server(PORT);
+	int sin_server_len = sizeof(sin_server);
+
+	/* bind server socket & sockaddr*/
+	bind(server_sock, &sin_server, sizeof(sin_server));
+
+	/* listen */
+	if (listen(server_sock, 10) < 0) {
 		perror("listen");
 		close(server_sock);
 		exit(-1);
 	}
-	printf("Listening...\n");
+	//printf("Listening...\n");
 
+	threadpool* pool = threadpool_create();
+
+	/* connection cnt */
 	int n_conn = 0;
-	// loop for listening
-	while (1)
-	{
-		// sockaddr of client (any ip and any port)
-		struct sockaddr_in sin_client;
-		memset(&sin_client, 0, sizeof(sin_client));
-		sin_client.sin_addr.s_addr = htonl(INADDR_ANY);
-		sin_client.sin_family = AF_INET;
-		sin_client.sin_port = htons(0);
+	/* loop for listening */
+	while (1){
+		/* sockaddr of client */
+		struct sockaddr_in sin_client = get_sin_client();
 		int sin_client_len = sizeof(sin_client);
-		// accept request from client & get a new socket
+
+		/* accept requests from client & get a new socket */
 		int accept_sock = accept(server_sock, &sin_client, &sin_client_len);
 		if (accept_sock < 0)
 		{
@@ -61,16 +84,11 @@ int main(int argc, char **argv)
 			exit(-1);
 		}
 		n_conn += 1;
-		printf("%d client(s) connected\n", n_conn);
-		// create a new thread to handle request
-		pthread_t new_thread;
-		pthread_attr_t attr;
-		pthread_attr_init(&attr);
-		pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+		//printf("%d client(s) connected\n", n_conn);
 
-		pthread_create(&new_thread, &attr, accept_request, &accept_sock);
-	//	pthread_join(new_thread, NULL);
-
+		/* assign handle request to a thread*/
+		tp_task* task = threadpool_create_tp_task(accept_request, &accept_sock);
+		threadpool_addtask(pool, task);
 	}
 	return 0;
 }
@@ -78,10 +96,10 @@ int main(int argc, char **argv)
 
 void* accept_request(void* arg){
 	int accept_sock = *(int*)arg;
-	char buf[MAX_LEN + 1];
+	char buf[MAX_BUF_LEN + 1];
 	// loop for recv
 	while(1){
-		int recv_len = recv(accept_sock, buf, MAX_LEN, 0);
+		int recv_len = recv(accept_sock, buf, MAX_BUF_LEN, 0);
 		if(recv_len < 0){
 			perror("recv");
 			close(accept_sock);
