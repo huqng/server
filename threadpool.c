@@ -4,40 +4,56 @@
 #include <stdio.h>
 
 // init routine of a thread
-void* start(void* arg){
+void* worker(void* arg){
+    if(arg == NULL){
+        perror("worker arg is nullptr");
+        exit(-1);
+    }
     tp_task* cur_task = NULL;
-    tp* pool = (tp*)arg; // arg should be thread pool itself
+    tp* pool = (tp*)arg;
+
     while(1){
         if(pthread_mutex_lock(&pool->mutex) != 0){
-            perror("lock mutex");
+            perror("pthread mutex lock");
             exit(-1);
         }
-        while(pool->task_cnt == 0){
+        while(pool->task_cnt == 0 && pool->shutdown != 1){
             if(pthread_cond_wait(&pool->cond, &pool->mutex) != 0){
-                perror("cond wait");
+                perror("pthread cond wait");
                 exit(-1);
             }
         }
 
+        /* return if shutdown */
+        if(pool->shutdown){
+            if(pthread_mutex_unlock(&pool->mutex) != 0){
+                perror("pthread mutex unlock");
+                exit(-1);
+            }
+            pthread_exit(NULL);
+        }
+
         // pop a task from task list
-        cur_task = pool->task;
-        pool->task = pool->task->next;
+        cur_task = pool->firsttask;
+        pool->firsttask = pool->firsttask->next;
         pool->task_cnt -= 1;
 
         if(pthread_mutex_unlock(&pool->mutex) != 0){
-            perror("unlock mutex");
+            perror("pthread mutex unlock");
             exit(-1);
         }
-    
+        
+        if(cur_task == NULL){
+            perror("task is nullptr"); // unexpected
+            exit(-1);
+        }
+
         // run task
         cur_task->f(cur_task->arg);
 
         // gc
         free(cur_task);
         cur_task = NULL;
-
-        // TODO -
-        //pthread_testcancel();
     }
     return NULL;
 }
@@ -46,11 +62,11 @@ void* start(void* arg){
 int threadpool_init(tp* pool){
     if(pool == NULL)
         return -1;
-    pool->size = INIT_TH_CNT;
-    //p->shutdown = 0;
+    pool->size = MAX_TH_NUM;
+    pool->shutdown = 0;
 
     // init task
-    pool->task = NULL;
+    pool->firsttask = NULL;
     pool->task_cnt = 0;
 
     // init mutex & cond
@@ -66,6 +82,7 @@ int threadpool_init(tp* pool){
     bug record: 
     Initialization of mutex and cond was before pthread_create,
     and then something wrong happened.
+    Because threads may run before mutex and cond are initialized.
     */
 
     // create threads
@@ -77,9 +94,9 @@ int threadpool_init(tp* pool){
     pthread_t new_thread;
     pthread_attr_t attr;
     pthread_attr_init(&attr);
-    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
     for(int i = 0; i < pool->size; i++){
-        if(pthread_create(&pool->threads[i], &attr, start, pool) != 0){
+        if(pthread_create(&pool->threads[i], &attr, worker, pool) != 0){
             perror("pthread create");
             exit(-1);
         }
@@ -91,19 +108,24 @@ int threadpool_init(tp* pool){
 // add a [tp_task task] to [threadpool pool]
 int threadpool_addtask(tp* pool, tp_task* task){
     if(pool == NULL || task == NULL){
-        perror("nullptr");
+        perror("pool or task is nullptr");
         exit(-1);
     }
-    
+
     if(pthread_mutex_lock(&pool->mutex) != 0){
-        perror("lock mutex");
+        perror("pthread mutex lock");
+        exit(-1);
+    }
+
+    if(pool->shutdown){
+        perror("add after shut");
         exit(-1);
     }
 
     if(pool->task_cnt == 0)
-        pool->task = task;
+        pool->firsttask = task;
     else{
-        tp_task* it = pool->task;
+        tp_task* it = pool->firsttask;
         while(it->next != NULL)
             it = it->next;
         it->next = task;
@@ -111,29 +133,54 @@ int threadpool_addtask(tp* pool, tp_task* task){
     pool->task_cnt += 1;
     
     if(pthread_mutex_unlock(&pool->mutex) != 0){
-        perror("unlock mutex");
+        perror("pthread mutex unlock");
         exit(-1);
     }
     if(pthread_cond_signal(&pool->cond) != 0){
-        perror("signal cond");
+        perror("pthread cond signal");
         exit(-1);
     }
-        
     return 0;
 }
 
-// ???
+// free & destroy
 int threadpool_destroy(tp* pool){
-    pthread_mutex_destroy(&pool->mutex);
-    pthread_cond_destroy(&pool->cond);
-    // TODO -
-/*    for(int i = 0; i < pool->size; i++){
-        if(pthread_cancel(pool->threads[i]) != 0){
-            perror("pthread cancel");
+    if(pool == NULL){
+        perror("tp nullptr");
+        exit(-1);
+    }
+    if(pthread_mutex_lock(&pool->mutex) != 0){
+        perror("pthread mutex lock");
+        exit(-1);
+    }
+    pool->shutdown = 1;
+    if(pthread_cond_broadcast(&pool->cond) != 0){
+        perror("pthread cond broadcast");
+        exit(-1);
+    }
+    printf("Waiting for all threads to terminate...\n");
+    for(int i = 0; i < MAX_TH_NUM; i++){
+        if(pthread_join(pool->threads[i], NULL) != 0){
+            perror("pthread join");
             exit(-1);
         }
-    }*/
+    }
+    printf("All threads terminated.\n");
+    if(pthread_mutex_unlock(&pool->mutex) != 0){
+        perror("pthread mutex unlock");
+        exit(-1);
+    }
+
+    if(pthread_mutex_destroy(&pool->mutex) != 0){
+        perror("pthread mutex destroy");
+        exit(-1);
+    }
+    if(pthread_cond_destroy(&pool->cond) != 0){
+        perror("pthread cond destroy");
+        exit(-1);
+    }
     free(pool->threads);
+    
 }
 
 // create & init & return a basic threadpool
@@ -152,7 +199,7 @@ tp* threadpool_create(){
 
 // create & return a tp_task struct(a node of linked list)
 tp_task* threadpool_create_tp_task(void*(*f)(void*), void* arg){
-	tp_task* task = (tp_task*)malloc(sizeof(tp_task));
+    tp_task* task = (tp_task*)malloc(sizeof(tp_task));
     if(task == NULL){
         perror("malloc");
         exit(-1);

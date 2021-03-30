@@ -1,9 +1,16 @@
-server: server.o threadpool.o
-	gcc server.o threadpool.o -pthread -o server
+OBJ = server.o threadpool.o
+
+server: $(OBJ)
+	gcc $(OBJ) -pthread -o server
+
+server.o: server.c
+	#gcc -c server.c 
+threadpool: threadpool.c threadpool.h
+	#gcc -c threadpool
 
 client: client.c
 	gcc client.c -o client -pthread
 
 .PHONY:
 clean:
-	rm server client test *.o
+	rm server client $(OBJ)

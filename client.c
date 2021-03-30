@@ -6,7 +6,7 @@
 #include<arpa/inet.h>
 #include<errno.h>
 
-#define MAX_LEN 1024
+#define MAX_BUF_LEN 1024
 
 int main(int argc, char** argv){
     int client_sock = socket(PF_INET, SOCK_STREAM, 0);
