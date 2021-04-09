@@ -14,8 +14,7 @@
 #define MAX_BUF_LEN 1024
 #define PORT 10000
 
-void* accept_request(void* arg);
-void handle_request(int sock, char* buf, int len);
+void* handle_request(void* arg);
 
 struct sockaddr_in get_sin_server(int port){
 	/* sockaddr of server socket */
@@ -89,78 +88,77 @@ int main(int argc, char **argv){
 		//printf("%d client(s) connected\n", n_conn);
 
 		/* assign handle request to a thread*/
-		tp_task* task = threadpool_create_tp_task(accept_request, &accept_sock);
+		tp_task* task = threadpool_create_tp_task(handle_request, &accept_sock);
 		threadpool_addtask(pool, task);
 	}
 	return 0;
 }
 
-void* accept_request(void* arg){
-	int accept_sock = *(int*)arg;
+void* handle_request(void* arg){
+	int sock = *(int*)arg;
 	char buf[MAX_BUF_LEN + 1];
-	// loop for recv
+	/* loop for recv */
 	while(1){
-		int recv_len = recv(accept_sock, buf, MAX_BUF_LEN, 0);
+		/* receive request */
+		int recv_len = recv(sock, buf, MAX_BUF_LEN, 0);
 		if(recv_len < 0){
-			perror("recv");
-			close(accept_sock);
+			perror("error recv");
+			close(sock);
 			exit(-1);
 		}
-		/* handle request */
-		handle_request(accept_sock, buf, recv_len);
 
-		//if(send(accept_sock, buf, recv_len, 0) < 0){
-		//	perror("send");
-		//	close(accept_sock);
-		//	exit(-1);
-		//}
-	}
-}
+		char* method;
+		char* url;
+		char* version;
+		/* TODO - return value -> http response status code? */
+		if(http_request_parse_1(buf, recv_len, &method, &url, &version) < 0){
+			perror("error http request parse\n");
+			exit(-1);
+		}
 
-void handle_request(int sock, char* buf, int len){
-	char* method;
-	char* url;
-	char* version;
-	if(http_request_parse(buf, len, &method, &url, &version) < 0){
-		perror("http request parse\n");
-		exit(-1);
-	}
-	int v10 		= !strcasecmp(version, "HTTP/1.0");
-	int v11 		= !strcasecmp(version, "HTTP/1.1");
-	int mget 		= !strcasecmp(method, "GET");
-	int mhead 		= !strcasecmp(method, "HEAD");
-	int mpost 		= !strcasecmp(method, "POST");
-	int mput 		= !strcasecmp(method, "PUT");
-	int mdelete 	= !strcasecmp(method, "DELETE");
-	int mconnect 	= !strcasecmp(method, "CONNECT");
-	int moptions 	= !strcasecmp(method, "OPTIONS");
-	int mtrace 		= !strcasecmp(method, "TRACE");
-	int mpatch 		= !strcasecmp(method, "PATCH");
-	if(v10 || v11){
-		if(mget){
-			char path[512];
+		int v10 		= !strcasecmp(version, "HTTP/1.0");
+		int v11 		= !strcasecmp(version, "HTTP/1.1");
+		int m_get 		= !strcasecmp(method, "GET");
+		int m_head 		= !strcasecmp(method, "HEAD");
+		int m_post 		= !strcasecmp(method, "POST");
+		int m_put 		= !strcasecmp(method, "PUT");
+		int m_delete 	= !strcasecmp(method, "DELETE");
+		int m_connect 	= !strcasecmp(method, "CONNECT");
+		int m_options 	= !strcasecmp(method, "OPTIONS");
+		int m_trace 	= !strcasecmp(method, "TRACE");
+		int m_patch 	= !strcasecmp(method, "PATCH");
+
+		if(m_get){
+			char *path = (char*)malloc(strlen(url) + 12);
 			int slen = sprintf(path, ".%s", url);
+			// /xxx/a.html -> ./xxx/a.html
 			if(path[slen - 1] == '/')
 				strcat(path, "index.html");
+			// ./xxx/ -> ./xxx/index.html
 			FILE* resource = fopen(path, "r");
 			if(resource == NULL){
+				/* TODO - status code */
 				perror("error fopen");
 				exit(-1);
 			}
 			else{
-				strcpy(buf, "HTTP/1.0 200 OK\r\n");
-				send(sock, buf, strlen(buf), 0);
-				strcpy(buf, "SERVER_STRING");
-				send(sock, buf, strlen(buf), 0);
-				sprintf(buf, "Content-Type: text/html\r\n");
-				send(sock, buf, strlen(buf), 0);
-				strcpy(buf, "\r\n");
-				send(sock, buf, strlen(buf), 0);
-				fgets(buf, sizeof(buf), resource);
-				while(!feof(resource)){
-					int sent = send(sock, buf, strlen(buf), 0);
+				char head[] = "HTTP/1.1 200 OK\r\nserver info\r\nContent-Type: text/html\r\n\r\n";
+				send(sock, head, sizeof(head), 0);
+
+				// line by line
+				do{
 					fgets(buf, sizeof(buf), resource);
+					int sent = send(sock, buf, strlen(buf), 0);
+					if(sent < 0){
+						perror("error send");
+						free(method);
+						free(url);
+						free(version);
+						free(path);
+						exit(-1);
+					}
 				}
+				while(!feof(resource));
 			}
 		}
 		else{
@@ -170,12 +168,5 @@ void handle_request(int sock, char* buf, int len){
 			free(version);
 			exit(-1);
 		}
-	}
-	else{
-		perror("error http version");
-		free(method);
-		free(url);
-		free(version);
-		exit(-1);
 	}
 }

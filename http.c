@@ -4,10 +4,12 @@
 #include <ctype.h>
 #include <stdio.h>
 
-int http_request_parse(char* buf, int len, char** method, char** url, char** version){
+int http_request_parse_1(char* buf, int len, char** method, char** url, char** version){
 	int i = 0;
 	int j = 0;
 	
+	// xxx yyy zzz\r\n
+	// ^^^
 	while(j < len && !isspace(buf[j]))
 		j++;
 
@@ -16,17 +18,22 @@ int http_request_parse(char* buf, int len, char** method, char** url, char** ver
 	else{
 		*method = (char*)malloc(j - i + 1);
 		if(*method == NULL){
-			perror("malloc\n");
+			perror("error malloc\n");
 			exit(-1);
 		}
 		for(int k = i; k < j; k++)
 			(*method)[k - i] = buf[k];
 		(*method)[j] = 0;
 	}
+
+	// xxx yyy zzz\r\n
+	//    ^
 	while(j < len && isspace(buf[j]))
 		j++;
 	i = j;
 	
+	// xxx yyy zzz\r\n
+	//     ^^^
 	while(j < len && !isspace(buf[j]))
 		j++;
 
@@ -35,17 +42,22 @@ int http_request_parse(char* buf, int len, char** method, char** url, char** ver
 	else{
 		*url = (char*)malloc(j - i + 1);
 		if(*url == NULL){
-			perror("malloc\n");
+			perror("error malloc\n");
 			exit(-1);
 		}
 		for(int k = i; k < j; k++)
 			(*url)[k - i] = buf[k];
 		(*url)[j] = 0;
 	}
+
+	// xxx yyy zzz\r\n
+	//        ^
 	while(j < len && isspace(buf[j]))
 		j++;
 	i = j;
 
+	// xxx yyy zzz\r\n
+	//         ^^^
 	while(j < len && !isspace(buf[j]))
 		j++;
 
@@ -54,7 +66,7 @@ int http_request_parse(char* buf, int len, char** method, char** url, char** ver
 	else{
 		*version = (char*)malloc(j - i + 1);
 		if(*version == NULL){
-			perror("malloc\n");
+			perror("error malloc\n");
 			exit(-1);
 		}
 		for(int k = i; k < j; k++)
