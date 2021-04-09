@@ -8,12 +8,13 @@
 #include <errno.h>
 
 #include "threadpool.h"
+#include "http.h"
 
 #define MAX_BUF_LEN 1024
 #define PORT 10000
 
 void* accept_request(void* arg);
-void modify_buf(char* buf, int len);
+void handle_request(char* buf, int len);
 
 struct sockaddr_in get_sin_server(int port){
 	/* sockaddr of server socket */
@@ -93,7 +94,6 @@ int main(int argc, char **argv){
 	return 0;
 }
 
-
 void* accept_request(void* arg){
 	int accept_sock = *(int*)arg;
 	char buf[MAX_BUF_LEN + 1];
@@ -105,8 +105,8 @@ void* accept_request(void* arg){
 			close(accept_sock);
 			exit(-1);
 		}
-		/* modify received msg in buf */
-		modify_buf(buf, recv_len);
+		/* handle request */
+		handle_request(buf, recv_len);
 
 		if(send(accept_sock, buf, recv_len, 0) < 0){
 			perror("send");
@@ -116,8 +116,12 @@ void* accept_request(void* arg){
 	}
 }
 
-void modify_buf(char* buf, int len){
-	for(int i = 0; i < len; i++){
-		buf[i] = buf[i] % 26 + 'A';
+void handle_request(char* buf, int len){
+	char* method;
+	char* url;
+	char* version;
+	if(http_request_parse(buf, len, method, url, version) < 0){
+		perror("http request parse\n");
+		exit(-1);
 	}
 }

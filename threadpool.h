@@ -1,5 +1,5 @@
 #ifndef _THREADPOOL_H
-#define _THREADPOOL_H 1
+#define _THREADPOOL_H
 
 #include <pthread.h>
 #include <semaphore.h>
