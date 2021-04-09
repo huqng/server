@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <errno.h>
+#include <sys/stat.h>
 
 #include "threadpool.h"
 #include "http.h"
@@ -14,7 +15,7 @@
 #define PORT 10000
 
 void* accept_request(void* arg);
-void handle_request(char* buf, int len);
+void handle_request(int sock, char* buf, int len);
 
 struct sockaddr_in get_sin_server(int port){
 	/* sockaddr of server socket */
@@ -64,7 +65,7 @@ int main(int argc, char **argv){
 		close(server_sock);
 		exit(-1);
 	}
-	//printf("Listening...\n");
+	printf("Listening...\n");
 
 	threadpool* pool = threadpool_create();
 
@@ -106,22 +107,75 @@ void* accept_request(void* arg){
 			exit(-1);
 		}
 		/* handle request */
-		handle_request(buf, recv_len);
+		handle_request(accept_sock, buf, recv_len);
 
-		if(send(accept_sock, buf, recv_len, 0) < 0){
-			perror("send");
-			close(accept_sock);
-			exit(-1);
-		}
+		//if(send(accept_sock, buf, recv_len, 0) < 0){
+		//	perror("send");
+		//	close(accept_sock);
+		//	exit(-1);
+		//}
 	}
 }
 
-void handle_request(char* buf, int len){
+void handle_request(int sock, char* buf, int len){
 	char* method;
 	char* url;
 	char* version;
-	if(http_request_parse(buf, len, method, url, version) < 0){
+	if(http_request_parse(buf, len, &method, &url, &version) < 0){
 		perror("http request parse\n");
+		exit(-1);
+	}
+	int v10 		= !strcasecmp(version, "HTTP/1.0");
+	int v11 		= !strcasecmp(version, "HTTP/1.1");
+	int mget 		= !strcasecmp(method, "GET");
+	int mhead 		= !strcasecmp(method, "HEAD");
+	int mpost 		= !strcasecmp(method, "POST");
+	int mput 		= !strcasecmp(method, "PUT");
+	int mdelete 	= !strcasecmp(method, "DELETE");
+	int mconnect 	= !strcasecmp(method, "CONNECT");
+	int moptions 	= !strcasecmp(method, "OPTIONS");
+	int mtrace 		= !strcasecmp(method, "TRACE");
+	int mpatch 		= !strcasecmp(method, "PATCH");
+	if(v10 || v11){
+		if(mget){
+			char path[512];
+			int slen = sprintf(path, ".%s", url);
+			if(path[slen - 1] == '/')
+				strcat(path, "index.html");
+			FILE* resource = fopen(path, "r");
+			if(resource == NULL){
+				perror("error fopen");
+				exit(-1);
+			}
+			else{
+				strcpy(buf, "HTTP/1.0 200 OK\r\n");
+				send(sock, buf, strlen(buf), 0);
+				strcpy(buf, "SERVER_STRING");
+				send(sock, buf, strlen(buf), 0);
+				sprintf(buf, "Content-Type: text/html\r\n");
+				send(sock, buf, strlen(buf), 0);
+				strcpy(buf, "\r\n");
+				send(sock, buf, strlen(buf), 0);
+				fgets(buf, sizeof(buf), resource);
+				while(!feof(resource)){
+					int sent = send(sock, buf, strlen(buf), 0);
+					fgets(buf, sizeof(buf), resource);
+				}
+			}
+		}
+		else{
+			perror("error http method");
+			free(method);
+			free(url);
+			free(version);
+			exit(-1);
+		}
+	}
+	else{
+		perror("error http version");
+		free(method);
+		free(url);
+		free(version);
 		exit(-1);
 	}
 }
