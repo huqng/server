@@ -5,7 +5,6 @@
 #include <semaphore.h>
 #include <stdlib.h>
 
-#define MAX_TH_NUM 4
 
 typedef struct tp_task{
 	void*(*f)(void*);
@@ -14,11 +13,11 @@ typedef struct tp_task{
 }tp_task;
 
 typedef struct threadpool{
-	int             size;       // num of threads
+	int             th_cnt;     // num of threads
 	int             shutdown;	// 
 
 	pthread_t*      threads;    // 
-	tp_task*        firsttask;		// head of task-linked-list 
+	tp_task*        firsttask;	// head of task-linked-list 
 	int 			task_cnt;	//
 
 	pthread_mutex_t mutex;		// 
@@ -28,7 +27,7 @@ typedef struct threadpool{
 typedef threadpool tp;
 
 tp* threadpool_create();
-int threadpool_init(tp* p);
+int threadpool_init(tp* p, int nth);
 int threadpool_addtask(tp* p, tp_task* t);
 int threadpool_destroy(tp* p);
 int threadpool_terminate(tp* p);
