@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <sys/fcntl.h>
+#include <pthread.h>
 
 /* File-reader with buffer */
 
@@ -26,7 +27,12 @@ int fr_read_byte(file_reader* fr, char* c);
 /* return n bytes from fr->fd, = n * fr_read_byte */
 int fr_read_n(file_reader* fr, char* c, int n);
 
-#define log_info(M, ...)	fprintf(stderr, "[INFO][%0X] (%s:%d) " M "\n", pthread_self(), __FILE__, __LINE__, ##__VA_ARGS__)
-#define log_err(M, ...)		fprintf(stderr, "[ERR] [%0X] (%s:%d) " M "\n", pthread_self(), __FILE__, __LINE__, ##__VA_ARGS__)
+#define LOG_INFO 	0
+#define LOG_ERR 	0
+#define LOG_DEBUG	0
+
+#define log_info(M, ...)	if(LOG_INFO)fprintf(stderr,		"[INFO]__[%0lX] (%s:%d) " M "\n", pthread_self(), __FILE__, __LINE__, ##__VA_ARGS__)
+#define log_err(M, ...)		if(LOG_ERR)fprintf(stderr,		"[ERR]___[%0lX] (%s:%d) " M "\n", pthread_self(), __FILE__, __LINE__, ##__VA_ARGS__)
+#define log_debug(M, ...)	if(LOG_DEBUG)fprintf(stderr,	"[DEBUG]_[%0lX] (%s:%d) " M "\n", pthread_self(), __FILE__, __LINE__, ##__VA_ARGS__)
 
 #endif

@@ -1,7 +1,5 @@
 #include "threadpool.h"
 
-#include <stdlib.h>
-#include <stdio.h>
 
 /* init routine of a thread */
 void* worker(void* arg){
@@ -14,10 +12,12 @@ void* worker(void* arg){
 
     /* run forever */
     while(1){
+        log_debug("tp worker: entering loop");
         if(pthread_mutex_lock(&pool->mutex) != 0){
             perror("pthread mutex lock");
             exit(-1);
         }
+        log_debug("tp worker: lock success, waiting for new task");
         /* if no task and pool is not shutdown, wait for new tasks */
         while(pool->task_cnt == 0 && pool->shutdown != 1){
             if(pthread_cond_wait(&pool->cond, &pool->mutex) != 0){
@@ -25,6 +25,7 @@ void* worker(void* arg){
                 exit(-1);
             }
         }
+        log_debug("tp worker: getting a task");
 
         /* return if shutdown */
         if(pool->shutdown){
@@ -40,15 +41,20 @@ void* worker(void* arg){
         pool->firsttask = cur_task->next;
         pool->task_cnt -= 1;
 
+        log_debug("tp worker: get new task success");
+
         if(pthread_mutex_unlock(&pool->mutex) != 0){
             perror("pthread mutex unlock");
             exit(-1);
         }
+        log_debug("tp worker: unlock success");
         
         if(cur_task == NULL){
             perror("task is NULL");
             exit(-1);
         }
+
+        log_debug("tp worker: starting run");
 
         /* run task */
         cur_task->f(cur_task->arg);

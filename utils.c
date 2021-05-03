@@ -5,7 +5,7 @@ int fr_init(file_reader* fr, int fd){
 	fr->end = 1;
 	fr->fd = fd;
 
-	int n = recv(fr->fd, fr->buf, FR_BUF_SIZE, 0);
+	int n = recv(fd, fr->buf, FR_BUF_SIZE, 0);
 
 	if(n < 0){
 		/* closed */

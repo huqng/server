@@ -120,6 +120,7 @@ int http_request_head_parse_0(int fd, char** method, char** url, char** version)
 			}
 			break;
 		case hp_error:
+			free(fr);
 			return -1;
 		case hp_success_0:
 			if(c == '\r') {
@@ -139,6 +140,7 @@ int http_request_head_parse_0(int fd, char** method, char** url, char** version)
 			}
 			break;
 		case hp_success:
+			free(fr);
 			return 0;
 		default:
 			/* unexpected */
@@ -174,10 +176,16 @@ void get_resource_path(char** path, char* url){
 
 int send_file(FILE* fp, int sock_fd) {
 	char buf[10];
-	while(!feof(fp)) {
-		fgets(buf, sizeof(buf), fp);
-		if(send(sock_fd, buf, strlen(buf), 0) < 0)
+	while(!feof(fp)) {		
+		if(fgets(buf, sizeof(buf), fp) == NULL){
+			log_err("fgets");
 			return -1;
+		}
+		/* to avoid shutdown when receiving SIGPIPE */
+		if(send(sock_fd, buf, strlen(buf), MSG_NOSIGNAL) < 0) {
+			log_err("fail to send");
+			return -1;
+		}
 	}
 	return 0;
 }

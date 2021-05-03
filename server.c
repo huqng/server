@@ -1,27 +1,5 @@
-#include <stdlib.h>
-#include <string.h>
-#include <stdio.h>
-#include <pthread.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <errno.h>
-#include <sys/stat.h>
-#include <sys/epoll.h>
-#include <unistd.h>
-#include <time.h>
+#include "server.h"
 
-#include "utils.h"
-#include "threadpool.h"
-#include "http.h"
-
-#define MAX_TH_NUM 2
-#define MAX_BUF_LEN 1024
-#define SERVER_PORT 10000
-
-typedef struct sockaddr_in sockaddr_in;
-
-void* handle_request(void* arg);
 
 void set_sin_server(sockaddr_in* sin, int port){
 	memset(sin, 0, sizeof(sockaddr_in));
@@ -37,7 +15,7 @@ void set_sin_client(sockaddr_in* sin) {
 	sin->sin_port = htons(0);
 }
 
-int main(int argc, char **argv){
+int run_server(int nth) {
 	/* create socket of server */
 	int server_sock = socket(PF_INET, SOCK_STREAM, 0);
 	if (server_sock < 0) {
@@ -63,7 +41,7 @@ int main(int argc, char **argv){
 	printf("Listening at port %d\n", SERVER_PORT);
 
 	/* create a threadpool */
-	threadpool* pool = threadpool_create(MAX_TH_NUM);
+	threadpool* pool = threadpool_create(nth);
 
 	/* listening */
 	while (1){
@@ -80,7 +58,7 @@ int main(int argc, char **argv){
 			exit(-1);
 		}
 		log_info("accepted a connect");
-		int flags = fcntl(accept_sock, F_GETFL, 0);
+		/*int flags = fcntl(accept_sock, F_GETFL, 0);
 		if(flags < 0){
 			perror("fcntl-getfl");
 			exit(-1);
@@ -88,7 +66,7 @@ int main(int argc, char **argv){
 		if(fcntl(accept_sock, F_SETFL, flags | O_NONBLOCK) < 0){
 			perror("fcntl-setfl");
 			exit(-1);
-		}
+		}*/
 
 		/* make a task and assign it to threadpool */
 		tp_task* task = threadpool_create_tp_task(handle_request, &accept_sock);
@@ -107,12 +85,12 @@ void* handle_request(void* arg){
 	char* version;
 	/* get method, url and version */
 	if(http_request_head_parse_0(sock_fd, &method, &url, &version) < 0){
-		log_info("fail to parse http request head");
+		log_err("fail to parse http request head");
 		return NULL;
 	}
 	else
 		log_info("parse: [%s] [%s] [%s]", method, url, version);
-
+ 
 	char* filename;
 	get_resource_path(&filename, url);
 
@@ -121,7 +99,7 @@ void* handle_request(void* arg){
 			FILE* fp = fopen(filename, "r");
 			
 			if(fp == NULL) {
-				log_info("fail to open file [%s]", filename);
+				log_err("fail to open file [%s]", filename);
 				// TODO - 404
 			}
 			else{
@@ -130,9 +108,10 @@ void* handle_request(void* arg){
 					"HTTP/1.1 200 OK\r\n"
 					"Server: aaaaaaa\r\n"
 					"Content-Type: text/html\r\n\r\n";
-				send(sock_fd, head, strlen(head), 0);
-
-				if(send_file(fp, sock_fd) < 0) {
+				if(send(sock_fd, head, strlen(head), 0) < 0){
+					log_err("fail to send http response head");;
+				}
+				else if(send_file(fp, sock_fd) < 0) {
 					log_err("fail to send file [%s]", filename);
 				}
 				else
@@ -157,6 +136,7 @@ void* handle_request(void* arg){
 	free(method);
 	free(url);
 	free(version);
+	log_debug("a task finishing");
 	return NULL;
 }
 

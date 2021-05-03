@@ -1,10 +1,12 @@
 #ifndef _HTTP_H
 #define _HTTP_H
 
-#include <string.h>
-#include <stdlib.h>
-#include <ctype.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <string.h>
+#include <ctype.h>
 #include <sys/socket.h>
 #include <pthread.h>
 #include "utils.h"
