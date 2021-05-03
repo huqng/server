@@ -7,7 +7,8 @@
 #include <netinet/in.h>
 #include <errno.h>
 #include <sys/stat.h>
-#include <sys/epoll.h>>
+#include <sys/epoll.h>
+#include <unistd.h>
 
 #include "threadpool.h"
 #include "http.h"
@@ -50,7 +51,7 @@ int main(int argc, char **argv){
 
 
 	/* bind server socket & sockaddr*/
-	bind(server_sock, &sin_server, sizeof(sin_server));
+	bind(server_sock, (const struct sockaddr*)&sin_server, sizeof(sin_server));
 
 	/* listen */
 	if (listen(server_sock, 10) < 0) {
@@ -71,7 +72,7 @@ int main(int argc, char **argv){
 		int sin_client_len = sizeof(sin_client);
 		
 		/* accept requests from client & get a new socket */
-		int accept_sock = accept(server_sock, &sin_client, &sin_client_len);
+		int accept_sock = accept(server_sock, (struct sockaddr* restrict)&sin_client, (socklen_t* restrict)&sin_client_len);
 		if (accept_sock < 0) {
 			perror("accept");
 			close(server_sock);
@@ -90,8 +91,9 @@ void* handle_request(void* arg){
 	char* method;
 	char* url;
 	char* version;
+	/* get method, url and version */
 	if(http_request_head_parse_0(sock_fd, &method, &url, &version) < 0){
-		printf("parse error")
+		printf("parse error");
 		return NULL;
 	}
 
@@ -105,8 +107,10 @@ void* handle_request(void* arg){
 		if(!strcasecmp(method, "GET")) {
 
 		}
-		else if(!strcasecmp(method, "POST")) {
-
+		//else if(!strcasecmp(method, "POST")) {
+		else {
+			printf("Unimplemented method\n");
+			return NULL;
 		}
 	}
 	else{

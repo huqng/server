@@ -1,18 +1,14 @@
-OBJ = server.o threadpool.o http.o
+obj = server.o threadpool.o http.o
+cc = gcc
 
-server: $(OBJ)
-	gcc $(OBJ) -pthread -o server
+server: $(obj)
+	$(cc) $(obj) -pthread -o server
 
-server.o: server.c
-	gcc -c server.c 
-threadpool: threadpool.c threadpool.h
-	gcc -c threadpool.c
-http.o: http.c http.h
-	gcc -c http.c
+server.o: threadpool.h http.h
+threadpool.o: threadpool.h
+http.o: http.h
 
-client: client.c
-	gcc client.c -o client -pthread
 
 .PHONY:
 clean:
-	rm server client $(OBJ)
+	-rm server $(obj)
