@@ -5,6 +5,8 @@
 #include <semaphore.h>
 #include <stdlib.h>
 
+#include "utils.h"
+
 
 typedef struct tp_task{
 	void*(*f)(void*);

@@ -56,6 +56,7 @@ void* worker(void* arg){
         /* gc */
         free(cur_task);
         cur_task = NULL;
+        log_info("a task finished");
     }
     /* should not return */
     return NULL;

@@ -1,4 +1,4 @@
-obj = server.o threadpool.o http.o
+obj = server.o threadpool.o http.o utils.o
 cc = gcc
 
 server: $(obj)
@@ -7,7 +7,7 @@ server: $(obj)
 server.o: threadpool.h http.h
 threadpool.o: threadpool.h
 http.o: http.h
-
+utils.o: utils.h
 
 .PHONY:
 clean:
