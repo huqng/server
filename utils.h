@@ -4,12 +4,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/socket.h>
-#include <sys/fcntl.h>
 #include <pthread.h>
+#include <fcntl.h>
 
 /* File-reader with buffer */
 
 #define FR_BUF_SIZE 1024
+
+//#define LOG_INFO 	
+//#define LOG_ERR 	
+//#define LOG_DEBUG	
 
 typedef struct file_reader{
 	char buf[FR_BUF_SIZE];
@@ -27,12 +31,28 @@ int fr_read_byte(file_reader* fr, char* c);
 /* return n bytes from fr->fd, = n * fr_read_byte */
 int fr_read_n(file_reader* fr, char* c, int n);
 
-#define LOG_INFO 	0
-#define LOG_ERR 	0
-#define LOG_DEBUG	0
+void make_fd_nonblocking(int fd);
 
-#define log_info(M, ...)	if(LOG_INFO)fprintf(stderr,		"[INFO]__[%0lX] (%s:%d) " M "\n", pthread_self(), __FILE__, __LINE__, ##__VA_ARGS__)
-#define log_err(M, ...)		if(LOG_ERR)fprintf(stderr,		"[ERR]___[%0lX] (%s:%d) " M "\n", pthread_self(), __FILE__, __LINE__, ##__VA_ARGS__)
-#define log_debug(M, ...)	if(LOG_DEBUG)fprintf(stderr,	"[DEBUG]_[%0lX] (%s:%d) " M "\n", pthread_self(), __FILE__, __LINE__, ##__VA_ARGS__)
+
+#ifdef LOG_INFO
+#define log_info(M, ...)\
+fprintf(stderr, "[INFO]__[%0lX] (%s:%d) " M "\n", pthread_self(), __FILE__, __LINE__, ##__VA_ARGS__)
+#else
+#define log_info(M, ...) ;
+#endif
+
+#ifdef LOG_ERR
+#define log_err(M, ...)\
+fprintf(stderr, "[ERR]___[%0lX] (%s:%d) " M "\n", pthread_self(), __FILE__, __LINE__, ##__VA_ARGS__)
+#else
+#define log_err(M, ...) ;
+#endif
+
+#ifdef LOG_DEBUG
+#define log_debug(M, ...)\
+fprintf(stderr, "[DEBUG]_[%0lX] (%s:%d) " M "\n", pthread_self(), __FILE__, __LINE__, ##__VA_ARGS__)
+#else
+#define log_debug(M, ...) ;
+#endif
 
 #endif

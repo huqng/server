@@ -17,15 +17,15 @@ void* worker(void* arg){
             perror("pthread mutex lock");
             exit(-1);
         }
-        log_debug("tp worker: lock success, waiting for new task");
+        log_debug("tp worker: lock success, getting new task");
         /* if no task and pool is not shutdown, wait for new tasks */
         while(pool->task_cnt == 0 && pool->shutdown != 1){
+            log_debug("tp worker: waiting for new tasks");
             if(pthread_cond_wait(&pool->cond, &pool->mutex) != 0){
                 perror("pthread cond wait");
                 exit(-1);
             }
         }
-        log_debug("tp worker: getting a task");
 
         /* return if shutdown */
         if(pool->shutdown){
@@ -60,6 +60,7 @@ void* worker(void* arg){
         cur_task->f(cur_task->arg);
 
         /* gc */
+        free(cur_task->arg);
         free(cur_task);
         cur_task = NULL;
         log_info("a task finished");
@@ -109,40 +110,58 @@ int threadpool_init(tp* pool, int nth){
 
 /* add a task to task queue of threadpool */
 int threadpool_addtask(tp* pool, tp_task* task){
+    log_debug("add task: starting");
     if(pool == NULL || task == NULL){
         perror("pool or task is NULL");
         exit(-1);
     }
+
+    log_debug("add task: locking");
 
     if(pthread_mutex_lock(&pool->mutex) != 0){
         perror("pthread mutex lock");
         exit(-1);
     }
 
+    log_debug("add task: locked");
+
     if(pool->shutdown){
         perror("add after shut");
         exit(-1);
     }
 
-    if(pool->task_cnt == 0)
+    log_debug("add task: adding");
+
+    if(pool->task_cnt == 0) {
+        log_debug("add task: added to head");
         pool->firsttask = task;
+    }
     else{
         // TODO - add a tail pointer of linked list
         tp_task* it = pool->firsttask;
         while(it->next != NULL)
             it = it->next;
         it->next = task;
+        log_debug("add task: added to tail");
     }
     pool->task_cnt += 1;
+
+    log_debug("add task: unlocking");
     
     if(pthread_mutex_unlock(&pool->mutex) != 0){
         perror("pthread mutex unlock");
         exit(-1);
     }
+
+    log_debug("add task: unlocked & signaling");
+
     if(pthread_cond_signal(&pool->cond) != 0){
         perror("pthread cond signal");
         exit(-1);
     }
+
+    log_debug("add task: signaled & quit");
+
     return 0;
 }
 

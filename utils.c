@@ -66,3 +66,15 @@ int fr_read_n(file_reader* fr, char* c, int n) {
     }
     return 0; 
 }
+
+void make_fd_nonblocking(int fd) {
+	int flags = fcntl(fd, F_GETFL);
+	if(flags < 0) {
+		perror("fcntl get");
+		exit(-1);
+	}
+	if(fcntl(fd, F_SETFL, O_NONBLOCK | flags) < 0) {
+		perror("fcntl set");
+		exit(-1);
+	}
+}

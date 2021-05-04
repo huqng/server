@@ -13,6 +13,7 @@
 #include <sys/epoll.h>
 #include <unistd.h>
 #include <time.h>
+#include <fcntl.h>
 
 #include "utils.h"
 #include "threadpool.h"
@@ -21,6 +22,11 @@
 #define MAX_TH_NUM 12
 #define MAX_BUF_LEN 1024
 #define SERVER_PORT 10000
+#define LISTENQ 1024
+
+typedef struct server_conf{
+
+}server_conf;
 
 typedef struct sockaddr_in sockaddr_in;
 
@@ -30,6 +36,6 @@ void set_sin_server(sockaddr_in* sin, int port);
 
 void set_sin_client(sockaddr_in* sin);
 
-int run_server(int nth);
+int run_server(int nth, int port);
 
 #endif
