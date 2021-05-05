@@ -1,5 +1,18 @@
 #include "server.h"
 
+void server_conf_init(server_conf* conf) {
+	conf->port = DEFAULT_PORT;
+	conf->use_epoll = 0;
+	conf->nth = DEFAULT_NTH;
+}
+
+void server_conf_set_port(server_conf* conf, int port) {
+	conf->port = port;
+}
+
+void server_conf_set_epoll(server_conf* conf, int use_epoll) {
+	conf->use_epoll = use_epoll;
+}
 
 void set_sin_server(sockaddr_in* sin, int port){
 	memset(sin, 0, sizeof(sockaddr_in));
@@ -15,7 +28,12 @@ void set_sin_client(sockaddr_in* sin) {
 	sin->sin_port = htons(0);
 }
 
-int run_server(int nth, int port) {
+int run_server(server_conf* conf) {
+	int port = conf->port;
+	int use_epoll = conf->use_epoll;
+	int nth = conf->nth;
+
+
 	/* create listening socket of server */
 	int listen_fd = socket(PF_INET, SOCK_STREAM, 0);
 	if (listen_fd < 0) {
@@ -28,9 +46,17 @@ int run_server(int nth, int port) {
 	struct sockaddr_in sin_server;
 	set_sin_server(&sin_server, port);
 	int sin_server_len = sizeof(sin_server);
+	int optval = 1;
+	if(setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
+		perror("fail to set sock opt");
+		exit(-1);
+	}
 
 	/* bind listen sock and sin_server */
-	bind(listen_fd, (const struct sockaddr*)&sin_server, sizeof(sin_server));
+	if(bind(listen_fd, (const struct sockaddr*)&sin_server, sizeof(sin_server)) < 0) {
+		perror("fail to bind");
+		exit(-1);
+	}
 	/* listen */
 	if (listen(listen_fd, LISTENQ) < 0) {
 		perror("listen");
@@ -42,135 +68,125 @@ int run_server(int nth, int port) {
 	/* create a threadpool */
 	threadpool* pool = threadpool_create(nth);
 
+	if(use_epoll) {
 
-#define USE_EPOLL 
-//#undef USE_EPOLL 
-
-#ifdef USE_EPOLL
-	log_info("using epoll");
-	/* epoll */
-	int epfd = epoll_create(1024);
-	if(epfd < 0) {
-		perror("epoll create");
-		exit(-1);
-	}
-
-	/* epoll - set event */
-	struct epoll_event event;
-	event.events = EPOLLIN | EPOLLET;
-	event.data.fd = listen_fd;
-
-	make_fd_nonblocking(listen_fd);
-
-	/* epoll - add event */
-	if(epoll_ctl(epfd, EPOLL_CTL_ADD, listen_fd, &event) < 0) {
-		perror("epoll add listen_fd");
-		exit(-1);
-	}
-
-	/* epoll - buffer for waiting */
-	struct epoll_event triggered_events[100];
-
-	while(1){
-		/* epoll - wait */	
-		log_info("epoll waiting");
-		int ntriggered = epoll_wait(epfd, triggered_events, 100, -1);
-		if(ntriggered < 0) {
-			perror("epoll wait");
+		printf("using epoll\n");
+		/* epoll */
+		int epfd = epoll_create(1024);
+		if(epfd < 0) {
+			perror("epoll create");
 			exit(-1);
 		}
-		else{
-			log_info("epoll: %d fd(s) triggered", ntriggered);
-			/* for each triggered fd */
-			for(int i = 0; i < ntriggered; i++){
-				/* if trigger listen_fd, accept all and add accept_fd to epoll */
-				if(triggered_events[i].data.fd == listen_fd){
-					/* get sockaddr of client */
-					struct sockaddr_in sin_client;
-					set_sin_client(&sin_client);
-					int sin_client_len = sizeof(sin_client);
 
-					/* epoll event for accept_fd */
-					struct epoll_event event;
-					event.events = EPOLLIN | EPOLLET | EPOLLONESHOT;
-					event.data.fd = -1;
+		/* epoll - set event */
+		struct epoll_event event;
+		event.events = EPOLLIN | EPOLLET;
+		event.data.fd = listen_fd;
 
-					/* while loop to accept all connect request */
-					while(1) {
-						/* accept and add to epoll */
-						int accept_fd = accept(listen_fd, (struct sockaddr* restrict)&sin_client, (socklen_t* restrict)&sin_client_len);
-						if (accept_fd < 0) {
-							if(errno == EAGAIN || errno == EWOULDBLOCK){
-								log_info("All requests accepted");
-								break; 
+		make_fd_nonblocking(listen_fd);
+
+		/* epoll - add event */
+		if(epoll_ctl(epfd, EPOLL_CTL_ADD, listen_fd, &event) < 0) {
+			perror("epoll add listen_fd");
+			exit(-1);
+		}
+
+		/* epoll - buffer for waiting */
+		struct epoll_event triggered_events[100];
+
+		while(1){
+			/* epoll - wait */	
+			log_info("epoll waiting");
+			int ntriggered = epoll_wait(epfd, triggered_events, 100, -1);
+			if(ntriggered < 0) {
+				perror("epoll wait");
+				exit(-1);
+			}
+			else{
+				log_info("epoll: %d fd(s) triggered", ntriggered);
+				/* for each triggered fd */
+				for(int i = 0; i < ntriggered; i++){
+					/* if trigger listen_fd, accept all and add accept_fd to epoll */
+					if(triggered_events[i].data.fd == listen_fd){
+						/* get sockaddr of client */
+						struct sockaddr_in sin_client;
+						set_sin_client(&sin_client);
+						int sin_client_len = sizeof(sin_client);
+
+						/* epoll event for accept_fd */
+						struct epoll_event event;
+						event.events = EPOLLIN | EPOLLET | EPOLLONESHOT;
+						event.data.fd = -1;
+
+						/* while loop to accept all connect request */
+						while(1) {
+							/* accept and add to epoll */
+							int accept_fd = accept(listen_fd, (struct sockaddr* restrict)&sin_client, (socklen_t* restrict)&sin_client_len);
+							if (accept_fd < 0) {
+								if(errno == EAGAIN || errno == EWOULDBLOCK){
+									log_info("All requests accepted");
+									break; 
+								}
+								else {
+									//log_err("accept");
+									log_info("fail to accept");
+									break;
+								}
 							}
-							else {
-								log_err("accept");
+							event.data.fd = accept_fd;
+							make_fd_nonblocking(accept_fd);
+							if(epoll_ctl(epfd, EPOLL_CTL_ADD, accept_fd, &event) < 0) {
+								log_err("epoll add");
 								break;
 							}
-						}
-						event.data.fd = accept_fd;
-						make_fd_nonblocking(accept_fd);
-						if(epoll_ctl(epfd, EPOLL_CTL_ADD, accept_fd, &event) < 0) {
-							log_err("epoll add");
-							break;
-						}
 
-						log_info("accepted a connect");
+							log_info("accepted a connect");
+						}
 					}
-				}
-				/* if not listen_fd */
-				else {
-					/* make a task and assign it to threadpool */
-					int *fd = (int*)malloc(sizeof(int));
-					*fd = triggered_events[i].data.fd;
-					tp_task* task = threadpool_create_tp_task(handle_request, fd);
-					threadpool_addtask(pool, task);
+					/* if not listen_fd */
+					else {
+						/* make a task and assign it to threadpool */
+						int *fd = (int*)malloc(sizeof(int));
+						*fd = triggered_events[i].data.fd;
+						tp_task* task = threadpool_create_tp_task(handle_request, fd);
+						threadpool_addtask(pool, task);
+					}
 				}
 			}
 		}
 	}
+	else {
 
 
-# else
+		/* listening */
+		while (1){
+			/* get sockaddr of client */
+			struct sockaddr_in sin_client;
+			set_sin_client(&sin_client);
+			int sin_client_len = sizeof(sin_client);
+			
+			/* accept requests from client & get a new socket */
+			int accept_sock = accept(listen_fd, (struct sockaddr* restrict)&sin_client, (socklen_t* restrict)&sin_client_len);
+			if (accept_sock < 0) {
+				log_err("fail to accept")
+				continue;
+				//perror("accept");
+				//exit(-1);
+			}
+			log_info("accepted a connect");
 
-
-	/* listening */
-	while (1){
-		/* get sockaddr of client */
-		struct sockaddr_in sin_client;
-		set_sin_client(&sin_client);
-		int sin_client_len = sizeof(sin_client);
-		
-		/* accept requests from client & get a new socket */
-		int accept_sock = accept(listen_fd, (struct sockaddr* restrict)&sin_client, (socklen_t* restrict)&sin_client_len);
-		if (accept_sock < 0) {
-			perror("accept");
-			close(listen_fd);
-			exit(-1);
+			/* make a task and assign it to threadpool */
+			int* fd = (int*)malloc(sizeof(int));
+			*fd = accept_sock;
+			tp_task* task = threadpool_create_tp_task(handle_request, fd);
+			threadpool_addtask(pool, task);
 		}
-		log_info("accepted a connect");
-		/*int flags = fcntl(accept_sock, F_GETFL, 0);
-		if(flags < 0){
-			perror("fcntl-getfl");
-			exit(-1);
-		}
-		if(fcntl(accept_sock, F_SETFL, flags | O_NONBLOCK) < 0){
-			perror("fcntl-setfl");
-			exit(-1);
-		}*/
-
-		/* make a task and assign it to threadpool */
-		int* fd = (int*)malloc(sizeof(int));
-		*fd = accept_sock;
-		tp_task* task = threadpool_create_tp_task(handle_request, fd);
-		threadpool_addtask(pool, task);
 	}
-	log_err("fatal error");
+
+	perror("fatal error");
 	threadpool_destroy(pool);
 	return 0;
 
-#endif
 
 }
 
