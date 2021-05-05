@@ -1,25 +1,34 @@
  #include "http.h"
 
 int http_request_head_parse_0(int fd, char** method, char** url, char** version){
+	/* a utility to read from fd */
 	file_reader* fr = (file_reader*)malloc(sizeof(file_reader));
 	int fr_ret = fr_init(fr, fd);
 	if(fr_ret < 0) {
 		log_err("fr_init failed: fd error");
 		return -2;
 	}
+	/* if state changed after reading, then don't need read again */
+	int need_read = 1;
 
 	/* an FSM to parse http request [method][url][version] */
+	int state = hp_method;
+	/* used to parse method, url and version */
 	int len_method, len_url, len_version;
 	char c;
 	int i = 0;
-	char* buffer = (char*)malloc(4096);
+
+	/* buffer to store string temporarily */
+	char* buffer = (char*)malloc(2048);
 	if(buffer == NULL) {
 		perror("malloc");
 		exit(-1);
-	}
-	int state = hp_method;
-	/* if state changed after reading, then don't need read again */
-	int need_read = 1;
+	} 
+
+	*method = NULL;
+	*url = NULL;
+	*version = NULL;
+
 	while(1){
 		if(need_read && fr_read_byte(fr, &c) < 0) {
 			/* eof before finishing parsing */
@@ -28,8 +37,10 @@ int http_request_head_parse_0(int fd, char** method, char** url, char** version)
 
 		switch (state) {
 		case hp_method:
+		{
 			if(c == '\r' || c == '\n') {
 				need_read = 0;
+				/* if any thing wrong, go to state errorm */
 				state = hp_error;
 			}
 			else if(isspace(c)) {
@@ -46,7 +57,9 @@ int http_request_head_parse_0(int fd, char** method, char** url, char** version)
 				i++;
 			}
 			break;
+		}
 		case hp_space_1:
+		{	
 			if(c == '\r' || c == '\n') {
 				free(*method);
 				need_read = 0;
@@ -61,9 +74,10 @@ int http_request_head_parse_0(int fd, char** method, char** url, char** version)
 				need_read = 1;
 			}
 			break;
+		}
 		case hp_url:
+		{
 			if(c == '\r' || c == '\n') {
-				free(*method);
 				need_read = 0;
 				state = hp_error;
 			}
@@ -81,10 +95,10 @@ int http_request_head_parse_0(int fd, char** method, char** url, char** version)
 				i++;
 			}
 			break;
+		}
 		case hp_space_2:
+		{
 			if(c == '\r' || c == '\n') {
-				free(*method);
-				free(*url);
 				need_read = 0;
 				state = hp_error;
 			}
@@ -97,7 +111,9 @@ int http_request_head_parse_0(int fd, char** method, char** url, char** version)
 				need_read = 1;
 			}
 			break;
+		}
 		case hp_version:
+		{
 			if(c == '\r' || c == '\n') {
 				len_version = i;
 				buffer[i] = 0;
@@ -108,8 +124,6 @@ int http_request_head_parse_0(int fd, char** method, char** url, char** version)
 				i = 0;
 			}
 			else if(isspace(c)) {
-				free(*method);
-				free(*url);
 				need_read = 0;
 				state = hp_error;
 			}
@@ -119,10 +133,21 @@ int http_request_head_parse_0(int fd, char** method, char** url, char** version)
 				i++;
 			}
 			break;
+		}
 		case hp_error:
+		{	
+			if(*method)
+				free(*method);
+			if(*url)
+				free(*url);
+			if(*version)
+				free(*version);
+			free(buffer);
 			free(fr);
 			return -1;
+		}
 		case hp_success_0:
+		{
 			if(c == '\r') {
 				need_read = 1;
 				state = hp_success_0;
@@ -132,16 +157,17 @@ int http_request_head_parse_0(int fd, char** method, char** url, char** version)
 				state = hp_success;
 			}
 			else {
-				free(*method);
-				free(*url);
-				free(*version);
 				need_read = 0;
 				state = hp_error;
 			}
 			break;
+		}
 		case hp_success:
+		{
+			free(buffer);
 			free(fr);
 			return 0;
+		}
 		default:
 			/* unexpected */
 			break;
