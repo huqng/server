@@ -96,14 +96,14 @@ int run_server(server_conf* conf) {
 
 		while(1){
 			/* epoll - wait */	
-			log_info("epoll waiting");
+			LOG_INFO("epoll waiting");
 			int ntriggered = epoll_wait(epfd, triggered_events, 100, -1);
 			if(ntriggered < 0) {
 				perror("epoll wait");
 				exit(-1);
 			}
 			else{
-				log_info("epoll: %d fd(s) triggered", ntriggered);
+				LOG_INFO("epoll: %d fd(s) triggered", ntriggered);
 				/* for each triggered fd */
 				for(int i = 0; i < ntriggered; i++){
 					/* if trigger listen_fd, accept all and add accept_fd to epoll */
@@ -124,23 +124,23 @@ int run_server(server_conf* conf) {
 							int accept_fd = accept(listen_fd, (struct sockaddr* restrict)&sin_client, (socklen_t* restrict)&sin_client_len);
 							if (accept_fd < 0) {
 								if(errno == EAGAIN || errno == EWOULDBLOCK){
-									log_info("All requests accepted");
+									LOG_INFO("All requests accepted");
 									break; 
 								}
 								else {
 									//log_err("accept");
-									log_info("fail to accept");
+									LOG_INFO("fail to accept");
 									break;
 								}
 							}
 							event.data.fd = accept_fd;
 							make_fd_nonblocking(accept_fd);
 							if(epoll_ctl(epfd, EPOLL_CTL_ADD, accept_fd, &event) < 0) {
-								log_err("epoll add");
+								LOG_ERR("epoll add");
 								break;
 							}
 
-							log_info("accepted a connect");
+							LOG_INFO("accepted a connect");
 						}
 					}
 					/* if not listen_fd */
@@ -168,12 +168,12 @@ int run_server(server_conf* conf) {
 			/* accept requests from client & get a new socket */
 			int accept_sock = accept(listen_fd, (struct sockaddr* restrict)&sin_client, (socklen_t* restrict)&sin_client_len);
 			if (accept_sock < 0) {
-				log_err("fail to accept");
+				LOG_ERR("fail to accept");
 				continue;
 				//perror("accept");
 				//exit(-1);
 			}
-			log_info("accepted a connect");
+			LOG_INFO("accepted a connect");
 
 			/* make a task and assign it to threadpool */
 			int* fd = (int*)malloc(sizeof(int));
@@ -191,16 +191,16 @@ int run_server(server_conf* conf) {
 }
 
 void* handle_request(void* arg){
-	log_info("handling");
+	LOG_INFO("handling");
 	int sock_fd = *(int*)arg;
 	http_request_t req;
 	/* get method, url and version */
 	if(http_request_head_parse_0(sock_fd, &req) < 0){
-		log_err("fail to parse http request head");
+		LOG_ERR("fail to parse http request head");
 		return NULL;
 	}
 	else
-		log_info("parse succeeded");
+		LOG_INFO("parse succeeded");
  
 	char* filename;
 	get_resource_path(&filename, req.url);
@@ -213,7 +213,7 @@ void* handle_request(void* arg){
 				char buf[256];
 				
 				if(fp == NULL) {
-					log_err("fail to open file [%s]", filename);
+					LOG_ERR("fail to open file [%s]", filename);
 					// TODO - 404
 				}
 				else{
@@ -226,18 +226,18 @@ void* handle_request(void* arg){
 						strcat(buf, filetype);
 					strcat(buf, rh_nl);
 					strcat(buf, rh_nl);
-					log_debug("[buf content:]\n%s", buf);
+					LOG_DEBUG("[buf content:]\n%s", buf);
 
 					if(send(sock_fd, buf, strlen(buf), 0) < 0){
-						log_err("fail to send http response head");;
+						LOG_ERR("fail to send http response head");;
 					}
 					else {
 						int nsend = send_file(fp, sock_fd);
 						if(nsend < 0) {
-						log_err("fail to send file [%s]", filename);
+						LOG_ERR("fail to send file [%s]", filename);
 					}
 					else
-						log_info("file sent [%s] [size = %d]", filename, nsend);
+						LOG_INFO("file sent [%s] [size = %d]", filename, nsend);
 					}
 
 					fclose(fp);
@@ -246,24 +246,24 @@ void* handle_request(void* arg){
 			}
 			case http_m_post:
 			{
-				log_err("Unimplemented HTTP version [%d]", req.method);
+				LOG_ERR("Unimplemented HTTP version [%d]", req.method);
 			}
 			default: 
 			{	
 				// 400: bad request
-				log_err("Unimplemented HTTP version [%sd]", req.method);
+				LOG_ERR("Unimplemented HTTP version [%sd]", req.method);
 			}
 		} // end of switch method
 	} 
 	else{
 		// 505: http version not supported
-		log_err("Unimplemented HTTP version [%s]", req.version);
+		LOG_ERR("Unimplemented HTTP version [%s]", req.version);
 	}
 
 	close(sock_fd);
 	free(filename);
 	free(req.url);
-	log_debug("a task finishing");
+	LOG_DEBUG("a task finishing");
 	return NULL;
 }
 

@@ -11,9 +11,6 @@
 
 #define FR_BUF_SIZE 1024
 
-#define LOG_INFO 	
-#define LOG_ERR 	
-#define LOG_DEBUG	
 
 typedef struct file_reader{
 	char buf[FR_BUF_SIZE];
@@ -33,26 +30,18 @@ int fr_read_n(file_reader* fr, char* c, int n);
 
 void make_fd_nonblocking(int fd);
 
+/* these could be configured in main() */
+extern int use_log_info;
+extern int use_log_err;
+extern int use_log_debug;
 
-#ifdef LOG_INFO
-#define log_info(M, ...)\
-fprintf(stderr, "[INFO]__[%0lX] (%s:%d) " M "\n", pthread_self(), __FILE__, __LINE__, ##__VA_ARGS__)
-#else
-#define log_info(M, ...) ;
-#endif
+#define LOG_INFO(M, ...)	if(use_log_info)\
+fprintf(stderr, "[INFO]__[%0lX] (%s:%d) " M "\n", pthread_self(), __FILE__, __LINE__, ##__VA_ARGS__);
 
-#ifdef LOG_ERR
-#define log_err(M, ...)\
-fprintf(stderr, "[ERR]___[%0lX] (%s:%d) " M "\n", pthread_self(), __FILE__, __LINE__, ##__VA_ARGS__)
-#else
-#define log_err(M, ...) ;
-#endif
+#define LOG_ERR(M, ...)		if(use_log_err) \
+fprintf(stderr, "[ERR]___[%0lX] (%s:%d) " M "\n", pthread_self(), __FILE__, __LINE__, ##__VA_ARGS__);
 
-#ifdef LOG_DEBUG
-#define log_debug(M, ...)\
-fprintf(stderr, "[DEBUG]_[%0lX] (%s:%d) " M "\n", pthread_self(), __FILE__, __LINE__, ##__VA_ARGS__)
-#else
-#define log_debug(M, ...) ;
-#endif
+#define LOG_DEBUG(M, ...)	if(use_log_debug)\
+fprintf(stderr, "[DEBUG]_[%0lX] (%s:%d) " M "\n", pthread_self(), __FILE__, __LINE__, ##__VA_ARGS__);
 
 #endif

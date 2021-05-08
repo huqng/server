@@ -21,9 +21,8 @@
 
 /* default configuration of server */
 #define DEFAULT_PORT 10000
-#define DEFAULT_NTH 96
+#define DEFAULT_NTH 24
 
-#define MAX_BUF_LEN 1024
 #define LISTENQ 1024
 
 typedef struct server_conf{

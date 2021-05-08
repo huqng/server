@@ -35,7 +35,7 @@ int fr_read_byte(file_reader* fr, char* c){
 			int n = recv(fr->fd, fr->buf, FR_BUF_SIZE, 0);
 			if(n < 0){
 				/* error */
-				log_err("fr_read_byte failed: fd read error");
+				LOG_ERR("fr_read_byte failed: fd read error");
 				return -2;
 			}
 			else if(n == 0){

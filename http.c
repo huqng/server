@@ -5,7 +5,7 @@ int http_request_head_parse_0(int fd, http_request_t* req){
 	file_reader* fr = (file_reader*)malloc(sizeof(file_reader));
 	int fr_ret = fr_init(fr, fd);
 	if(fr_ret < 0) {
-		log_err("fr_init failed: fd error");
+		LOG_ERR("fr_init failed: fd error");
 		return -2;
 	}
 	/* if state changed after reading, then don't need read again */
@@ -199,13 +199,13 @@ int send_file(FILE* fp, int sock_fd) {
 	while(!feof(fp)) {		
 		int nread = fread(buf, 1, bufsize, fp);
 		if(nread < 0){
-			log_err("fread");
+			LOG_ERR("fread");
 			return -1;
 		} 
 		/* to avoid shutdown when receiving SIGPIPE */
 		int t = send(sock_fd, buf, nread, MSG_NOSIGNAL);
 		if(t < 0) {
-			log_err("fail to send");
+			LOG_ERR("fail to send");
 			return -1;
 		}
 		nsend += t;
