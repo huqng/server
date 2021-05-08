@@ -24,7 +24,7 @@ int main(int argc, char** argv) {
         switch (ch) {
         case 'h':
             help();
-            break;
+            return 0;
         case 'p':
         {
             int port = atoi(optarg);
@@ -52,7 +52,7 @@ int main(int argc, char** argv) {
             break;
         default:
             help();
-            break;
+            return 0;
         }
     }
 

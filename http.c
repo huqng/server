@@ -1,6 +1,6 @@
  #include "http.h"
 
-int http_request_head_parse_0(int fd, char** method, char** url, char** version){
+int http_request_head_parse_0(int fd, http_request_t* req){
 	/* a utility to read from fd */
 	file_reader* fr = (file_reader*)malloc(sizeof(file_reader));
 	int fr_ret = fr_init(fr, fd);
@@ -25,9 +25,7 @@ int http_request_head_parse_0(int fd, char** method, char** url, char** version)
 		exit(-1);
 	} 
 
-	*method = NULL;
-	*url = NULL;
-	*version = NULL;
+	char *url = NULL;
 
 	while(1){
 		if(need_read && fr_read_byte(fr, &c) < 0) {
@@ -48,8 +46,7 @@ int http_request_head_parse_0(int fd, char** method, char** url, char** version)
 				state = hp_space_1;
 				len_method = i;
 				buffer[i] = 0;
-				*method = (char*)malloc(i + 1);
-				memcpy(*method, buffer, i + 1);
+				req->method = get_http_request_method(buffer);
 			}
 			else {
 				need_read = 1;
@@ -61,7 +58,6 @@ int http_request_head_parse_0(int fd, char** method, char** url, char** version)
 		case hp_space_1:
 		{	
 			if(c == '\r' || c == '\n') {
-				free(*method);
 				need_read = 0;
 				state = hp_error;
 			}
@@ -86,8 +82,8 @@ int http_request_head_parse_0(int fd, char** method, char** url, char** version)
 				state = hp_space_2;
 				len_url = i;
 				buffer[i] = 0;
-				*url = (char*)malloc(i + 1);
-				memcpy(*url, buffer, i + 1);
+				url = (char*)malloc(i + 1);
+				memcpy(url, buffer, i + 1);
 			}
 			else {
 				need_read = 1;
@@ -117,8 +113,7 @@ int http_request_head_parse_0(int fd, char** method, char** url, char** version)
 			if(c == '\r' || c == '\n') {
 				len_version = i;
 				buffer[i] = 0;
-				*version = (char*)malloc(i + 1);
-				memcpy(*version, buffer, i + 1);
+				req->version = get_http_version(buffer);
 				need_read = 0;
 				state = (c == '\r' ? hp_success_0 : hp_success);
 				i = 0;
@@ -136,12 +131,8 @@ int http_request_head_parse_0(int fd, char** method, char** url, char** version)
 		}
 		case hp_error:
 		{	
-			if(*method)
-				free(*method);
-			if(*url)
-				free(*url);
-			if(*version)
-				free(*version);
+			if(url != NULL)
+				free(url);
 			free(buffer);
 			free(fr);
 			return -1;
@@ -166,6 +157,7 @@ int http_request_head_parse_0(int fd, char** method, char** url, char** version)
 		{
 			free(buffer);
 			free(fr);
+			req->url = url;
 			return 0;
 		}
 		default:
@@ -214,4 +206,37 @@ int send_file(FILE* fp, int sock_fd) {
 		}
 	}
 	return 0;
+}
+
+http_request_method_t get_http_request_method(const char* method) {
+	if(!strncasecmp(method, "GET", 3)) 
+		return http_m_get;
+	else if(!strncasecmp(method, "POST", 4)) 
+		return http_m_post;
+	else if(!strncasecmp(method, "HEAD", 4)) 
+		return http_m_head;
+	else if(!strncasecmp(method, "PUT", 3)) 
+		return http_m_put;
+	else if(!strncasecmp(method, "DELETE", 6)) 
+		return http_m_delete;
+	else if(!strncasecmp(method, "CONNECT", 7)) 
+		return http_m_connect;
+	else if(!strncasecmp(method, "OPTIONS", 7)) 
+		return http_m_options;
+	else if(!strncasecmp(method, "TRACE", 5)) 
+		return http_m_trace;
+	else if(!strncasecmp(method, "PATCH", 5)) 
+		return http_m_patch;
+	else 
+		return http_m_err;
+	
+}
+
+http_version_t get_http_version(const char* version) {
+	if(!strncasecmp(version, "HTTP/1.0", 8)) 
+		return http_v_1_0;
+	else if(!strncasecmp(version, "HTTP/1.1", 8))
+		return http_v_1_1;
+	else
+		return http_v_err;
 }

@@ -193,11 +193,9 @@ int run_server(server_conf* conf) {
 void* handle_request(void* arg){
 	log_info("handling");
 	int sock_fd = *(int*)arg;
-	char* method;
-	char* url;
-	char* version;
+	http_request_t req;
 	/* get method, url and version */
-	if(http_request_head_parse_0(sock_fd, &method, &url, &version) < 0){
+	if(http_request_head_parse_0(sock_fd, &req) < 0){
 		log_err("fail to parse http request head");
 		return NULL;
 	}
@@ -205,50 +203,56 @@ void* handle_request(void* arg){
 		log_info("parse: [%s] [%s] [%s]", method, url, version);
  
 	char* filename;
-	get_resource_path(&filename, url);
+	get_resource_path(&filename, req.url);
 
-	if(!strcasecmp(version, "HTTP/1.1") || !strcasecmp(version, "HTTP/1.0")){
-		if(!strcasecmp(method, "GET")) {
-			FILE* fp = fopen(filename, "r");
-			
-			if(fp == NULL) {
-				log_err("fail to open file [%s]", filename);
-				// TODO - 404
-			}
-			else{
-				/* succeed to open file */
-				char head[] = 
-					"HTTP/1.1 200 OK\r\n"
-					"Server: aaaaaaa\r\n"
-					"Content-Type: text/html\r\n\r\n";
-				if(send(sock_fd, head, strlen(head), 0) < 0){
-					log_err("fail to send http response head");;
+	if(req.version == http_v_1_0 || req.version == http_v_1_1){
+		switch(req.method) {
+			case http_m_get:
+			{
+				FILE* fp = fopen(filename, "r");
+				
+				if(fp == NULL) {
+					log_err("fail to open file [%s]", filename);
+					// TODO - 404
 				}
-				else if(send_file(fp, sock_fd) < 0) {
-					log_err("fail to send file [%s]", filename);
-				}
-				else
-					log_info("file sent [%s]", filename);
+				else{
+					/* succeed to open file */
+					char head[] = 
+						"HTTP/1.1 200 OK\r\n"
+						"Server: Nonserver\r\n"
+						"Content-Type: text/html\r\n\r\n";
+					if(send(sock_fd, head, strlen(head), 0) < 0){
+						log_err("fail to send http response head");;
+					}
+					else if(send_file(fp, sock_fd) < 0) {
+						log_err("fail to send file [%s]", filename);
+					}
+					else
+						log_info("file sent [%s]", filename);
 
-				fclose(fp);
+					fclose(fp);
+				}
+				break;
 			}
-		}
-		else if(!strcasecmp(method, "POST")) {
-			log_err("Unimplemented HTTP version [%s]", method);
-		}
-		else {	
-			log_err("Unimplemented HTTP version [%s]", method);
-		}
-	}
+			case http_m_post:
+			{
+				log_err("Unimplemented HTTP version [%d]", req.method);
+			}
+			default: 
+			{	
+				// 400: bad request
+				log_err("Unimplemented HTTP version [%sd]", req.method);
+			}
+		} // end of switch method
+	} 
 	else{
-		log_err("Unimplemented HTTP version [%s]", version);
+		// 505: http version not supported
+		log_err("Unimplemented HTTP version [%s]", req.version);
 	}
 
 	close(sock_fd);
 	free(filename);
-	free(method);
-	free(url);
-	free(version);
+	free(req.url);
 	log_debug("a task finishing");
 	return NULL;
 }
