@@ -36,12 +36,12 @@ extern int use_log_err;
 extern int use_log_debug;
 
 #define LOG_INFO(M, ...)	if(use_log_info)\
-fprintf(stderr, "[INFO]__[%0lX] (%s:%d) " M "\n", pthread_self(), __FILE__, __LINE__, ##__VA_ARGS__);
+fprintf(stderr, "[INFO]__[%0lX] (%s:%d) " M "\n", pthread_self(), __FILE__, __LINE__, ##__VA_ARGS__)
 
 #define LOG_ERR(M, ...)		if(use_log_err) \
-fprintf(stderr, "[ERR]___[%0lX] (%s:%d) " M "\n", pthread_self(), __FILE__, __LINE__, ##__VA_ARGS__);
+fprintf(stderr, "[ERR]___[%0lX] (%s:%d) " M "\n", pthread_self(), __FILE__, __LINE__, ##__VA_ARGS__)
 
 #define LOG_DEBUG(M, ...)	if(use_log_debug)\
-fprintf(stderr, "[DEBUG]_[%0lX] (%s:%d) " M "\n", pthread_self(), __FILE__, __LINE__, ##__VA_ARGS__);
+fprintf(stderr, "[DEBUG]_[%0lX] (%s:%d) " M "\n", pthread_self(), __FILE__, __LINE__, ##__VA_ARGS__)
 
 #endif

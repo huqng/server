@@ -12,6 +12,7 @@
 #include "utils.h"
 
 #define RESOURCE_ROOT_DIR "."
+#define RESPONSE_404_HTML "./404.html"
 
 typedef enum http_parse_state_t{
 	hp_method = 0,
@@ -52,6 +53,7 @@ typedef struct http_request_t {
 /* http Response Head consts */
 /* nl means New Line */
 static char rh_status_200_nl[] 		= "HTTP/1.1 200 OK\r\n";
+static char rh_status_404_nl[] 		= "HTTP/1.1 200 Not Found\r\n";
 static char rh_server_nl[] 			= "Server: Nonserver\r\n";
 
 static char rh_content_type[] 		= "Content-Type: ";

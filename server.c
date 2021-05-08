@@ -213,8 +213,24 @@ void* handle_request(void* arg){
 				char buf[256];
 				
 				if(fp == NULL) {
-					LOG_ERR("fail to open file [%s]", filename);
-					// TODO - 404
+					LOG_ERR("fail to open file [%s], responding 404", filename);
+					strcpy(buf, rh_status_404_nl);
+					strcat(buf, rh_server_nl);
+					strcat(buf, rh_content_type);
+					strcat(buf, rh_content_type_html);
+					strcat(buf, rh_nl);
+					strcat(buf, rh_nl);
+					if(send(sock_fd, buf, strlen(buf), 0) < 0){
+						LOG_ERR("fail to send http response head");;
+					}
+					else {
+						FILE* f404 = fopen(RESPONSE_404_HTML, "r");
+						int nsend = send_file(f404, sock_fd);
+						if(nsend < 0) 
+							LOG_ERR("fail to send file [%s]", filename);
+						else
+							LOG_INFO("404 sent");
+					}
 				}
 				else{
 					/* succeed to open file */					
@@ -239,7 +255,6 @@ void* handle_request(void* arg){
 					else
 						LOG_INFO("file sent [%s] [size = %d]", filename, nsend);
 					}
-
 					fclose(fp);
 				}
 				break;
