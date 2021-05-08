@@ -168,7 +168,7 @@ int run_server(server_conf* conf) {
 			/* accept requests from client & get a new socket */
 			int accept_sock = accept(listen_fd, (struct sockaddr* restrict)&sin_client, (socklen_t* restrict)&sin_client_len);
 			if (accept_sock < 0) {
-				log_err("fail to accept")
+				log_err("fail to accept");
 				continue;
 				//perror("accept");
 				//exit(-1);
@@ -200,7 +200,7 @@ void* handle_request(void* arg){
 		return NULL;
 	}
 	else
-		log_info("parse: [%s] [%s] [%s]", method, url, version);
+		log_info("parse succeeded");
  
 	char* filename;
 	get_resource_path(&filename, req.url);
@@ -210,25 +210,35 @@ void* handle_request(void* arg){
 			case http_m_get:
 			{
 				FILE* fp = fopen(filename, "r");
+				char buf[256];
 				
 				if(fp == NULL) {
 					log_err("fail to open file [%s]", filename);
 					// TODO - 404
 				}
 				else{
-					/* succeed to open file */
-					char head[] = 
-						"HTTP/1.1 200 OK\r\n"
-						"Server: Nonserver\r\n"
-						"Content-Type: text/html\r\n\r\n";
-					if(send(sock_fd, head, strlen(head), 0) < 0){
+					/* succeed to open file */					
+					strcpy(buf, rh_status_200_nl);
+					strcat(buf, rh_server_nl);
+					strcat(buf, rh_content_type);
+					char* filetype = get_contene_type(filename);
+					if(filetype != NULL)
+						strcat(buf, filetype);
+					strcat(buf, rh_nl);
+					strcat(buf, rh_nl);
+					log_debug("[buf content:]\n%s", buf);
+
+					if(send(sock_fd, buf, strlen(buf), 0) < 0){
 						log_err("fail to send http response head");;
 					}
-					else if(send_file(fp, sock_fd) < 0) {
+					else {
+						int nsend = send_file(fp, sock_fd);
+						if(nsend < 0) {
 						log_err("fail to send file [%s]", filename);
 					}
 					else
-						log_info("file sent [%s]", filename);
+						log_info("file sent [%s] [size = %d]", filename, nsend);
+					}
 
 					fclose(fp);
 				}

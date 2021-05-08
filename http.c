@@ -193,19 +193,24 @@ void get_resource_path(char** path, char* url){
 }
 
 int send_file(FILE* fp, int sock_fd) {
-	char buf[10];
+	const int bufsize = 64;
+	char buf[bufsize];
+	int nsend = 0;
 	while(!feof(fp)) {		
-		if(fgets(buf, sizeof(buf), fp) == NULL){
-			log_err("fgets");
+		int nread = fread(buf, 1, bufsize, fp);
+		if(nread < 0){
+			log_err("fread");
 			return -1;
-		}
+		} 
 		/* to avoid shutdown when receiving SIGPIPE */
-		if(send(sock_fd, buf, strlen(buf), MSG_NOSIGNAL) < 0) {
+		int t = send(sock_fd, buf, nread, MSG_NOSIGNAL);
+		if(t < 0) {
 			log_err("fail to send");
 			return -1;
 		}
+		nsend += t;
 	}
-	return 0;
+	return nsend;
 }
 
 http_request_method_t get_http_request_method(const char* method) {
@@ -239,4 +244,22 @@ http_version_t get_http_version(const char* version) {
 		return http_v_1_1;
 	else
 		return http_v_err;
+}
+
+char* get_contene_type(char* filename) {
+	char* p = filename;
+	char* q = filename;
+	while(*p != 0) {
+		if(*p == '.')
+			q = p + 1;
+		p++;
+	}
+	if(!strcasecmp(q, "png"))
+		return rh_content_type_png;
+	else if(!strcasecmp(q, "html"))
+		return rh_content_type_html;
+	else if(!strcasecmp(q, "ico"))
+		return rh_content_type_icon;
+	else
+		return NULL;
 }

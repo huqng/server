@@ -11,9 +11,9 @@
 
 #define FR_BUF_SIZE 1024
 
-//#define LOG_INFO 	
-//#define LOG_ERR 	
-//#define LOG_DEBUG	
+#define LOG_INFO 	
+#define LOG_ERR 	
+#define LOG_DEBUG	
 
 typedef struct file_reader{
 	char buf[FR_BUF_SIZE];
