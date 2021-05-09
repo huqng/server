@@ -2,7 +2,7 @@
 
 int nonfunc() {}
 
-int fr_init(file_reader* fr, int fd){
+int fr_init(fd_reader* fr, int fd){
 	fr->index = 0;
 	fr->end = 1;
 	fr->fd = fd;
@@ -25,7 +25,7 @@ int fr_init(file_reader* fr, int fd){
 	}
 }
 
-int fr_read_byte(file_reader* fr, char* c){
+int fr_read_byte(fd_reader* fr, char* c){
     /* if buffer is used up, re-read */
 	if(fr->index >= fr->end){
         /* if has had eof */
@@ -61,7 +61,7 @@ int fr_read_byte(file_reader* fr, char* c){
 	}
 }
 
-int fr_read_n(file_reader* fr, char* c, int n) {
+int fr_read_n(fd_reader* fr, char* c, int n) {
     for (int i = 0; i < n; i++) {
         if(fr_read_byte(fr, c + i) < 0)
             return -1;

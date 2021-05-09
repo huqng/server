@@ -12,17 +12,23 @@
 #include "utils.h"
 
 #define RESOURCE_ROOT_DIR "."
-#define RESPONSE_404_HTML "./404.html"
+#define RESPONSE_404_HTML "./html/404.html"
 
 typedef enum http_parse_state_t{
-	hp_method = 0,
-	hp_space_1,
-	hp_url,
-	hp_space_2,
-	hp_version,
-	hp_error,
-	hp_success_0,
-	hp_success
+	hp_s_method = 0,
+	hp_s_space_1,
+	hp_s_url,
+	hp_s_space_2,
+	hp_s_version,
+	hp_s_error,
+	hp_s_line_cr,
+	hp_s_line_nl,
+	hp_s_key,
+	hp_s_key_end,
+	hp_s_val,
+	hp_s_val_end,
+	hp_s_finish,
+	hp_s_next_key
 }http_parse_state_t;
 
 typedef enum http_request_method_t {
@@ -48,7 +54,16 @@ typedef struct http_request_t {
 	enum http_request_method_t method;
 	char* url;
 	http_version_t version;
+	int connection;
 }http_request_t;
+
+int http_request_init(http_request_t* r);
+
+int http_request_parse(int fd, http_request_t* req);
+
+int http_parse_get_value(fd_reader* fr, char* buf, int bufsize);
+
+int http_request_set_kv(char* key, char* value, http_request_t* req);
 
 /* http Response Head consts */
 /* nl means New Line */
@@ -62,9 +77,6 @@ static char rh_content_type_png[] 	= "img/x-png";
 static char rh_content_type_icon[] 	= "img/x-icon";
 static char rh_nl[] = "\r\n";
 
-int http_request_head_parse_0(int fd, http_request_t* req);
-
-int http_request_head_parse_1(int fd, http_request_t* req);
 
 void get_resource_path(char** path, char* url);
 
@@ -74,6 +86,6 @@ http_request_method_t get_http_request_method(const char* method);
 
 http_version_t get_http_version(const char* version);
 
-char* get_contene_type(char* filename);
+char* get_content_type(char* filename);
 
 #endif

@@ -1,53 +1,73 @@
  #include "http.h"
 
-int http_request_head_parse_0(int fd, http_request_t* req) {
+int http_request_init(http_request_t* r) {
+	r->method = -1;
+	r->url = NULL;
+	r->version = -1;
+	r->connection = 0;
+	return 0;
+}
+
+int http_request_parse(int fd, http_request_t* req) {
+	/* This function is to parse http request and store in arg req.
+	 * An http request is like: 
+	 *		GET /xx/xx HTTP/1.1
+	 * 		Key: value
+	 * 		Key: value
+	 * 		...
+	 * Need to get method, url, version, and key/value of each line.
+	 */
+
 	/* a utility to read from fd */
-	file_reader* fr = (file_reader*)malloc(sizeof(file_reader));
+	fd_reader* fr = (fd_reader*)malloc(sizeof(fd_reader));
 	int fr_ret = fr_init(fr, fd);
 	if(fr_ret < 0) {
 		LOG_ERR("fr_init failed: fd error");
 		return -2;
 	}
-	/* if state changed after reading, then don't need read again */
+	/* if state changed after reading(known by reading one byte), then don't need read again */
 	int need_read = 1;
 
-	/* an FSM to parse http request [method][url][version] */
-	int state = hp_method;
-	/* used to parse method, url and version */
-	int len_method, len_url, len_version;
-	char c;
+	/* use an FSM to parse http request */
+	int state = hp_s_method;
+	int fr_end = 0;
+	char c = -1;
 	int i = 0;
+	char *url = NULL;
 
 	/* buffer to store string temporarily */
-	char* buffer = (char*)malloc(2048);
+	const int bufsize = 4096;
+	char* buffer = (char*)malloc(bufsize);
 	if(buffer == NULL) {
 		perror("malloc");
 		exit(-1);
 	} 
 
-	char *url = NULL;
 
-	while(1){
+	while(1) {
 		if(need_read && fr_read_byte(fr, &c) < 0) {
-			/* eof before finishing parsing */
-			state = hp_error;
+			/* if cannot read more */
+			//LOG_DEBUG("eof, state = %d", state);
+			fr_end = 1;
 		}
 
 		switch (state) {
-		case hp_method:
+		case hp_s_method:
 		{
-			if(c == '\r' || c == '\n') {
+			if(fr_end) {
 				need_read = 0;
-				/* if any thing wrong, go to state errorm */
-				state = hp_error;
+				state = hp_s_error;
 			}
-			else if(isspace(c)) {
+			else if(c == ' ') {
 				need_read = 0;
-				state = hp_space_1;
-				len_method = i;
+				state = hp_s_space_1;
 				buffer[i] = 0;
 				req->method = get_http_request_method(buffer);
 			}
+			else if(isspace(c) || i >= bufsize) {
+				need_read = 0;
+				state = hp_s_error;
+			}
 			else {
 				need_read = 1;
 				buffer[i] = c;
@@ -55,35 +75,43 @@ int http_request_head_parse_0(int fd, http_request_t* req) {
 			}
 			break;
 		}
-		case hp_space_1:
+		case hp_s_space_1:
 		{	
-			if(c == '\r' || c == '\n') {
+			if(fr_end) {
 				need_read = 0;
-				state = hp_error;
+				state = hp_s_error;
 			}
-			else if(!isspace(c)) {
-				need_read = 0;
-				state = hp_url;
-				i = 0;
-			}
-			else{
+			else if(c == ' ') {
 				need_read = 1;
+			}
+			else if (isspace(c)){
+				need_read = 0;
+				state = hp_s_error;
+			}
+			else {
+				need_read = 0;
+				state = hp_s_url;
+				i = 0;
 			}
 			break;
 		}
-		case hp_url:
+		case hp_s_url:
 		{
-			if(c == '\r' || c == '\n') {
+			if(fr_end) {
 				need_read = 0;
-				state = hp_error;
+				state = hp_s_error;
 			}
-			else if(isspace(c)) {
+			else if(c == ' ') {
 				need_read = 0;
-				state = hp_space_2;
-				len_url = i;
+				state = hp_s_space_2;
 				buffer[i] = 0;
 				url = (char*)malloc(i + 1);
+				req->url = url;
 				memcpy(url, buffer, i + 1);
+			}
+			else if(isspace(c) || i >= bufsize) {
+				need_read = 0;
+				state = hp_s_error;
 			}
 			else {
 				need_read = 1;
@@ -92,35 +120,42 @@ int http_request_head_parse_0(int fd, http_request_t* req) {
 			}
 			break;
 		}
-		case hp_space_2:
+		case hp_s_space_2:
 		{
-			if(c == '\r' || c == '\n') {
+			if(fr_end) {
 				need_read = 0;
-				state = hp_error;
+				state = hp_s_error;
+			}
+			else if(c == ' ') {
+				need_read = 1;
 			}
 			else if(!isspace(c)) {
 				need_read = 0;
-				state = hp_version;
+				state = hp_s_version;
 				i = 0;
 			}
-			else{
-				need_read = 1;
+			else {
+				need_read = 0;
+				state = hp_s_error;
 			}
 			break;
 		}
-		case hp_version:
+		case hp_s_version:
 		{
-			if(c == '\r' || c == '\n') {
-				len_version = i;
+			if(fr_end) {
+				need_read = 0;
+				state = hp_s_error;
+			}
+			else if(i < bufsize && c == '\r') {
 				buffer[i] = 0;
 				req->version = get_http_version(buffer);
 				need_read = 0;
-				state = (c == '\r' ? hp_success_0 : hp_success);
+				state = hp_s_line_cr;
 				i = 0;
 			}
-			else if(isspace(c)) {
+			else if(isspace(c) || i >= bufsize) {
 				need_read = 0;
-				state = hp_error;
+				state = hp_s_error;
 			}
 			else {
 				need_read = 1;
@@ -129,48 +164,217 @@ int http_request_head_parse_0(int fd, http_request_t* req) {
 			}
 			break;
 		}
-		case hp_error:
+		case hp_s_error:
 		{	
+			/* if any thing wrong, go to state error */
 			if(url != NULL)
 				free(url);
 			free(buffer);
 			free(fr);
 			return -1;
 		}
-		case hp_success_0:
+		case hp_s_line_cr:
 		{
-			if(c == '\r') {
+			if(fr_end) {
+				need_read = 0;
+				state = hp_s_error;
+			}
+			else if(c == '\r') {
 				need_read = 1;
-				state = hp_success_0;
 			}
 			else if(c == '\n') {
 				need_read = 0;
-				state = hp_success;
+				state = hp_s_line_nl;
 			}
-			else {
+			else{
 				need_read = 0;
-				state = hp_error;
+				state = hp_s_error;
 			}
 			break;
 		}
-		case hp_success:
+		case hp_s_line_nl:
+		{
+			if(fr_end) {
+				need_read = 0;
+				state = hp_s_finish;
+			}
+			else if(c == '\n') {
+				need_read = 1;
+			}
+			else if(!isspace(c)) {
+				/* after parsing method, url and version, parse [key, value] */
+				need_read = 0;
+				state = hp_s_next_key;
+			}
+			else{
+				need_read = 0;
+				state = hp_s_error;
+			}
+			break;
+		}
+		case hp_s_key:
+		{
+			/* read key until ':' */
+			/* Key: value */
+			/*    ^       */
+			if(fr_end) {
+				need_read = 0;
+				state = hp_s_error;
+			}
+			else if(i < bufsize && c == ':') {
+				need_read = 0;
+				buffer[i] = 0;
+				state = hp_s_key_end;
+			}
+			else if(i < bufsize) {
+				need_read = 1;
+				buffer[i] = c;
+				i++;
+			}
+			else {
+				need_read = 0;
+				state = hp_s_error;
+			}
+			break;
+		}
+		case hp_s_key_end:
+		{
+			if(fr_end) {
+				need_read = 0;
+				state = hp_s_error;
+			}
+			else if (c == ':') {
+				/* Key: value */
+				/*    ^       */
+				need_read = 1;
+			}
+			else if (c == ' ') {
+				/* Key: value */
+				/*      ^     */
+				char* pkey = buffer;
+				char* pval = buffer + i + 1;
+
+				/* get value */
+				int r = http_parse_get_value(fr, pval, bufsize - i - 1);
+				if(r < 0) {
+					need_read = 0;
+					state = hp_s_error;
+				}
+				else {
+					LOG_DEBUG("parse key/value ok -- [%s]: [%s]", pkey, pval);
+					/* set [key/value] */
+					http_request_set_kv(pkey, pval, req);
+
+					/* next line */
+					need_read = 1;
+					LOG_DEBUG("next line1, c = [%d]", c);
+					state = hp_s_next_key;
+					i = 0;
+				}
+				
+			}
+			break;
+		}
+		case hp_s_finish:
 		{
 			free(buffer);
 			free(fr);
-			req->url = url;
+			LOG_DEBUG("Parse success");
 			return 0;
+		}
+		case hp_s_next_key:
+		{
+		/*start of parsing a [key, value]*/
+			if(c == '\r') {
+				need_read = 1;
+			}
+			else if(c == '\n') {
+				need_read = 1;
+				state = hp_s_finish;
+			}
+			/* has next [key, value] */
+			else {
+				need_read = 0;
+				state = hp_s_key;
+			}
+			break;
 		}
 		default:
 			/* unexpected */
 			break;
 		}
 	}
-	perror("http request head parse fatal error");
-	exit(-1);
+
+	free(buffer);
+	free(fr);
+	LOG_DEBUG("Parse success");
+	return 0;
 }
 
-int http_request_head_parse_1(int fd, http_request_t* req) {
+int http_request_set_kv(char* key, char* value, http_request_t* req) {
+	if(strcasecmp(key, "Connection")) {
+		if(strcasecmp(value, "keep-alive")) {
+			req->connection = 1;
+		}
+	}
+
 	return 0;
+}
+
+int http_parse_get_value(fd_reader* fr, char* buf, int bufsize) {
+	/* Key: value */
+	/*      ^     */
+	int state = hp_s_val;
+	int need_read = 1;
+	char c;
+	int i = 0;
+	while(1) {
+		if(need_read && fr_read_byte(fr, &c) < 0) {
+			/* eof before finishing parsing */
+			return -1;
+		}
+		
+		switch (state)
+		{
+		case hp_s_val:
+		{
+			if(i < bufsize && c == '\r') {
+				need_read = 0;
+				state = hp_s_line_cr;
+				buf[i] = 0;
+			}
+			else{
+				need_read = 1;
+				buf[i] = c;
+				i++;
+			}
+			break;
+		}
+		case hp_s_line_cr:
+		{
+			if(c == '\r') {
+				need_read = 1;
+				state = hp_s_line_nl;
+			}
+			else {
+				return -1;
+			}
+			break;
+		}
+		case hp_s_line_nl:
+		{
+			if(c == '\n') {
+				/* Key: value\r\n means parse succeeded */
+				/*             ^                        */
+				return 0;
+			}
+			break;
+		}
+		default:
+			return -1;
+		}
+
+	}
 }
 
 void get_resource_path(char** path, char* url) {
@@ -250,7 +454,7 @@ http_version_t get_http_version(const char* version) {
 		return http_v_err;
 }
 
-char* get_contene_type(char* filename) {
+char* get_content_type(char* filename) {
 	char* p = filename;
 	char* q = filename;
 	while(*p != 0) {
@@ -267,3 +471,4 @@ char* get_contene_type(char* filename) {
 	else
 		return NULL;
 }
+

@@ -9,26 +9,26 @@
 
 /* File-reader with buffer */
 
-#define FR_BUF_SIZE 1024
+#define FR_BUF_SIZE 256
 
 
-typedef struct file_reader{
+typedef struct fd_reader{
 	char buf[FR_BUF_SIZE];
 	int index;
 	int end;
 	int fd;
-}file_reader;
+}fd_reader;
 
 int nonfunc();
 
 /* initialize a file-reader, return 0 if succeed or -1 if fail (file closed)*/
-int fr_init(file_reader* fr, int fd);
+int fr_init(fd_reader* fr, int fd);
 
 /* read a byte from fr->fd, return 0 if succeed or -1 if fail */
-int fr_read_byte(file_reader* fr, char* c);
+int fr_read_byte(fd_reader* fr, char* c);
 
 /* return n bytes from fr->fd, = n * fr_read_byte */
-int fr_read_n(file_reader* fr, char* c, int n);
+int fr_read_n(fd_reader* fr, char* c, int n);
 
 void make_fd_nonblocking(int fd);
 

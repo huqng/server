@@ -13,8 +13,10 @@ void help() {
         "    -e                | enable log_err (default = not)\n"
         "    -i                | enable log_info (default = not)\n"
         "    -h                | print this help\n"
-        "    -p <port>         | specify port (default = 10000)\n"
-        "    -t <thread num>   | specify nth (Number of threads)\n"
+        "    -p <port>         | specify port (default = %d)\n"
+        "    -t <thread num>   | specify nth (Number of threads, default = %d)\n",
+        DEFAULT_PORT,
+        DEFAULT_NTH
     );
 }
 
@@ -22,8 +24,8 @@ int main(int argc, char** argv) {
     // TODO - cli args
 
     /* initial configuration */
-    server_conf conf;
-    server_conf_init(&conf);
+    server_conf* conf = (server_conf*)malloc(sizeof(server_conf));
+    server_conf_init(conf);
 
     char ch = -1;
     while((ch = getopt(argc, argv, "deihp:t:")) != -1) {
@@ -45,10 +47,11 @@ int main(int argc, char** argv) {
             int port = atoi(optarg);
             if(port <= 0){
                 printf("error: port is supposed to be a number > 0\n");
+                help();
                 exit(-1);
             }
             else
-                conf.port = port;
+                conf->port = port;
             break;
         }
         case 't':
@@ -56,10 +59,11 @@ int main(int argc, char** argv) {
             int nth = atoi(optarg);
             if(nth <= 0){
                 printf("error: nth is supposed to be a number > 0\n");
+                help();
                 exit(-1);
             }
             else
-                conf.nth = nth;
+                conf->nth = nth;
             break;
         }
         default:
@@ -68,6 +72,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    run_server(&conf);
+    run_server(conf);
+    free(conf);
     return 0;
 }

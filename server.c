@@ -58,31 +58,30 @@ int run_server(server_conf* conf) {
 	/* create a threadpool */
 	threadpool* pool = threadpool_create(nth);
 
-		printf("using epoll\n");
-		/* epoll */
-		int epfd = epoll_create(1024);
-		if(epfd < 0) {
-			perror("epoll create");
-			exit(-1);
-		}
+	/* epoll */
+	int epfd = epoll_create(1024);
+	if(epfd < 0) {
+		perror("epoll create");
+		exit(-1);
+	}
 
-		/* epoll - set event */
-		struct epoll_event event;
-		event.events = EPOLLIN | EPOLLET;
-		event.data.fd = listen_fd;
+	/* epoll - set event */
+	struct epoll_event event;
+	event.events = EPOLLIN | EPOLLET;
+	event.data.fd = listen_fd;
 
-		make_fd_nonblocking(listen_fd);
+	make_fd_nonblocking(listen_fd);
 
-		/* epoll - add event */
-		if(epoll_ctl(epfd, EPOLL_CTL_ADD, listen_fd, &event) < 0) {
-			perror("epoll add listen_fd");
-			exit(-1);
-		}
+	/* epoll - add event */
+	if(epoll_ctl(epfd, EPOLL_CTL_ADD, listen_fd, &event) < 0) {
+		perror("epoll add listen_fd");
+		exit(-1);
+	}
 
-		/* epoll - buffer for waiting */
-		struct epoll_event triggered_events[100];
+	/* epoll - buffer for waiting */
+	struct epoll_event triggered_events[100];
 
-		while(1){
+	while(1){
 		/* epoll - wait */	
 		LOG_INFO("epoll waiting");
 		int ntriggered = epoll_wait(epfd, triggered_events, 100, -1);
@@ -155,25 +154,19 @@ void* handle_request(void* arg){
 	LOG_INFO("handling");
 	int sock_fd = *(int*)arg;
 	http_request_t* req = (http_request_t*)malloc(sizeof(http_request_t));
+	http_request_init(req);
+
 	/* get method, url and version */
-	if(http_request_head_parse_0(sock_fd, req) < 0){
+	int ret = http_request_parse(sock_fd, req);
+	if(ret  < 0){
 		free(req);
 		LOG_ERR("fail to parse http request head 0");
 		return NULL;
 	}
 	else
 		LOG_INFO("parse succeeded 0");
-
-	/* get other properties */
-	if(http_request_head_parse_1(sock_fd, req) < 0){
-		free(req->url);
-		free(req);
-		LOG_ERR("fail to parse http request head 1");
-		return NULL;
-	}
-	else
-		LOG_INFO("parse succeeded 0");
  
+	/* get filename from url */
 	char* filename;
 	get_resource_path(&filename, req->url);
 
@@ -215,7 +208,7 @@ void* handle_request(void* arg){
 					strcpy(buf, rh_status_200_nl);
 					strcat(buf, rh_server_nl);
 					strcat(buf, rh_content_type);
-					char* filetype = get_contene_type(filename);
+					char* filetype = get_content_type(filename);
 					if(filetype != NULL)
 						strcat(buf, filetype);
 					strcat(buf, rh_nl);
