@@ -1,6 +1,6 @@
  #include "http.h"
 
-int http_request_head_parse_0(int fd, http_request_t* req){
+int http_request_head_parse_0(int fd, http_request_t* req) {
 	/* a utility to read from fd */
 	file_reader* fr = (file_reader*)malloc(sizeof(file_reader));
 	int fr_ret = fr_init(fr, fd);
@@ -169,7 +169,11 @@ int http_request_head_parse_0(int fd, http_request_t* req){
 	exit(-1);
 }
 
-void get_resource_path(char** path, char* url){
+int http_request_head_parse_1(int fd, http_request_t* req) {
+	return 0;
+}
+
+void get_resource_path(char** path, char* url) {
 	int root_dir_len = strlen(RESOURCE_ROOT_DIR);
 	int url_len = strlen(url);
 	int url_is_dir = 0;

@@ -19,6 +19,8 @@ typedef struct file_reader{
 	int fd;
 }file_reader;
 
+int nonfunc();
+
 /* initialize a file-reader, return 0 if succeed or -1 if fail (file closed)*/
 int fr_init(file_reader* fr, int fd);
 
@@ -35,13 +37,13 @@ extern int use_log_info;
 extern int use_log_err;
 extern int use_log_debug;
 
-#define LOG_INFO(M, ...)	if(use_log_info)\
-fprintf(stderr, "[INFO]__[%0lX] (%s:%d) " M "\n", pthread_self(), __FILE__, __LINE__, ##__VA_ARGS__)
+#define LOG_INFO(M, ...)	((int(*)(FILE*, const char*, ...))(use_log_info ? (void*)fprintf : (void*)nonfunc)) \
+	(stderr, "[INFO]__[%0lX] (%s:%d) " M "\n", pthread_self(), __FILE__, __LINE__, ##__VA_ARGS__)
 
-#define LOG_ERR(M, ...)		if(use_log_err) \
-fprintf(stderr, "[ERR]___[%0lX] (%s:%d) " M "\n", pthread_self(), __FILE__, __LINE__, ##__VA_ARGS__)
+#define LOG_ERR(M, ...)		((int(*)(FILE*, const char*, ...))(use_log_err ? (void*)fprintf : (void*)nonfunc)) \
+	(stderr, "[ERR]___[%0lX] (%s:%d) " M "\n", pthread_self(), __FILE__, __LINE__, ##__VA_ARGS__)
 
-#define LOG_DEBUG(M, ...)	if(use_log_debug)\
-fprintf(stderr, "[DEBUG]_[%0lX] (%s:%d) " M "\n", pthread_self(), __FILE__, __LINE__, ##__VA_ARGS__)
+#define LOG_DEBUG(M, ...)	((int(*)(FILE*, const char*, ...))(use_log_debug ? (void*)fprintf : (void*)nonfunc)) \
+	(stderr, "[DEBUG]_[%0lX] (%s:%d) " M "\n", pthread_self(), __FILE__, __LINE__, ##__VA_ARGS__)
 
 #endif

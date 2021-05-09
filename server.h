@@ -27,7 +27,6 @@
 
 typedef struct server_conf{
     uint16_t    port;
-    int16_t     use_epoll; 
     int         nth;
 }server_conf;
 

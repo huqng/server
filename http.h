@@ -64,6 +64,8 @@ static char rh_nl[] = "\r\n";
 
 int http_request_head_parse_0(int fd, http_request_t* req);
 
+int http_request_head_parse_1(int fd, http_request_t* req);
+
 void get_resource_path(char** path, char* url);
 
 int send_file(FILE* fp, int sock_fd);

@@ -15,7 +15,6 @@ void help() {
         "    -h                | print this help\n"
         "    -p <port>         | specify port (default = 10000)\n"
         "    -t <thread num>   | specify nth (Number of threads)\n"
-        "    -E                | use epoll, (default = not)\n"    
     );
 }
 
@@ -27,7 +26,7 @@ int main(int argc, char** argv) {
     server_conf_init(&conf);
 
     char ch = -1;
-    while((ch = getopt(argc, argv, "deihp:t:E")) != -1) {
+    while((ch = getopt(argc, argv, "deihp:t:")) != -1) {
         switch (ch) {
         case 'd':
             use_log_debug = 1;
@@ -63,9 +62,6 @@ int main(int argc, char** argv) {
                 conf.nth = nth;
             break;
         }
-        case 'E':
-            conf.use_epoll = 1;
-            break;
         default:
             help();
             return 0;

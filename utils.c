@@ -1,5 +1,7 @@
 #include "utils.h"
 
+int nonfunc() {}
+
 int fr_init(file_reader* fr, int fd){
 	fr->index = 0;
 	fr->end = 1;
