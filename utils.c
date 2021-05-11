@@ -1,6 +1,6 @@
 #include "utils.h"
 
-int nonfunc() {}
+int pass() {}
 
 int fr_init(fd_reader* fr, int fd){
 	fr->index = 0;

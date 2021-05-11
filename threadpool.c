@@ -60,10 +60,9 @@ void* worker(void* arg){
         cur_task->f(cur_task->arg);
 
         /* gc */
-        free(cur_task->arg);
         free(cur_task);
         cur_task = NULL;
-        //LOG_INFO("a task finished");
+        LOG_DEBUG("a task finished");
     }
     /* should not return */
     return NULL;

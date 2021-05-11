@@ -1,24 +1,38 @@
  #include "http.h"
 
-int http_request_init(http_request_t* r) {
+int http_init_request(http_request_t* r, int epfd, int fd) {
+	r->epfd = epfd;
+	r->fd = fd;
+
+	timer_node* tn = (timer_node*)malloc(sizeof(timer_node)); /* free in timer_queue_pop_min */
+	if(tn == NULL) {
+		perror("malloc");
+		exit(-1);
+	}
+	tn->req = r;
+	tn->deleted = 0;
+	gettimeofday(&tn->t, NULL);
+	r->tn = tn;
+
 	r->method = -1;
-	r->url = NULL;
+	r->uri = NULL;
 	r->version = -1;
 	r->connection = 0;
 	return 0;
 }
 
-int http_request_parse(int fd, http_request_t* req) {
+int http_parse_request(http_request_t* req) {
 	/* This function is to parse http request and store in arg req.
 	 * An http request is like: 
 	 *		GET /xx/xx HTTP/1.1
-	 * 		Key: value
-	 * 		Key: value
+	 * 		header(key): value
+	 * 		header: value
 	 * 		...
-	 * Need to get method, url, version, and key/value of each line.
+	 * Need to get method, uri, version, and header/value of each line.
 	 */
 
-	/* a utility to read from fd */
+	/* fr is a utility to read from fd */
+	int fd = req->fd;
 	fd_reader* fr = (fd_reader*)malloc(sizeof(fd_reader));
 	int fr_ret = fr_init(fr, fd);
 	if(fr_ret < 0) {
@@ -33,7 +47,7 @@ int http_request_parse(int fd, http_request_t* req) {
 	int fr_end = 0;
 	char c = -1;
 	int i = 0;
-	char *url = NULL;
+	char *uri = NULL;
 
 	/* buffer to store string temporarily */
 	const int bufsize = 4096;
@@ -90,12 +104,12 @@ int http_request_parse(int fd, http_request_t* req) {
 			}
 			else {
 				need_read = 0;
-				state = hp_s_url;
+				state = hp_s_uri;
 				i = 0;
 			}
 			break;
 		}
-		case hp_s_url:
+		case hp_s_uri:
 		{
 			if(fr_end) {
 				need_read = 0;
@@ -105,9 +119,9 @@ int http_request_parse(int fd, http_request_t* req) {
 				need_read = 0;
 				state = hp_s_space_2;
 				buffer[i] = 0;
-				url = (char*)malloc(i + 1);
-				req->url = url;
-				memcpy(url, buffer, i + 1);
+				uri = (char*)malloc(i + 1);
+				req->uri = uri;
+				memcpy(uri, buffer, i + 1);
 			}
 			else if(isspace(c) || i >= bufsize) {
 				need_read = 0;
@@ -167,8 +181,8 @@ int http_request_parse(int fd, http_request_t* req) {
 		case hp_s_error:
 		{	
 			/* if any thing wrong, go to state error */
-			if(url != NULL)
-				free(url);
+			if(uri != NULL)
+				free(uri);
 			free(buffer);
 			free(fr);
 			return -1;
@@ -184,7 +198,7 @@ int http_request_parse(int fd, http_request_t* req) {
 			}
 			else if(c == '\n') {
 				need_read = 0;
-				state = hp_s_line_nl;
+				state = hp_s_line_lf;
 			}
 			else{
 				need_read = 0;
@@ -192,7 +206,7 @@ int http_request_parse(int fd, http_request_t* req) {
 			}
 			break;
 		}
-		case hp_s_line_nl:
+		case hp_s_line_lf:
 		{
 			if(fr_end) {
 				need_read = 0;
@@ -202,7 +216,7 @@ int http_request_parse(int fd, http_request_t* req) {
 				need_read = 1;
 			}
 			else if(!isspace(c)) {
-				/* after parsing method, url and version, parse [key, value] */
+				/* after parsing method, uri and version, parse [key, value] */
 				need_read = 0;
 				state = hp_s_next_key;
 			}
@@ -255,19 +269,19 @@ int http_request_parse(int fd, http_request_t* req) {
 				char* pval = buffer + i + 1;
 
 				/* get value */
-				int r = http_parse_get_value(fr, pval, bufsize - i - 1);
+				int r = http_parse_value(fr, pval, bufsize - i - 1);
 				if(r < 0) {
 					need_read = 0;
 					state = hp_s_error;
 				}
 				else {
-					LOG_DEBUG("parse key/value ok -- [%s]: [%s]", pkey, pval);
+					//LOG_DEBUG("parse key/value ok -- [%s]: [%s]", pkey, pval);
 					/* set [key/value] */
-					http_request_set_kv(pkey, pval, req);
+					http_set_request_value(pkey, pval, req);
 
 					/* next line */
 					need_read = 1;
-					LOG_DEBUG("next line1, c = [%d]", c);
+					//LOG_DEBUG("next line1, c = [%d]", c);
 					state = hp_s_next_key;
 					i = 0;
 				}
@@ -279,7 +293,7 @@ int http_request_parse(int fd, http_request_t* req) {
 		{
 			free(buffer);
 			free(fr);
-			LOG_DEBUG("Parse success");
+			//LOG_DEBUG("Parse finished");
 			return 0;
 		}
 		case hp_s_next_key:
@@ -307,13 +321,12 @@ int http_request_parse(int fd, http_request_t* req) {
 
 	free(buffer);
 	free(fr);
-	LOG_DEBUG("Parse success");
 	return 0;
 }
 
-int http_request_set_kv(char* key, char* value, http_request_t* req) {
-	if(strcasecmp(key, "Connection")) {
-		if(strcasecmp(value, "keep-alive")) {
+int http_set_request_value(char* key, char* value, http_request_t* req) {
+	if(!strcasecmp(key, "Connection")) {
+		if(!strcasecmp(value, "keep-alive")) {
 			req->connection = 1;
 		}
 	}
@@ -321,7 +334,7 @@ int http_request_set_kv(char* key, char* value, http_request_t* req) {
 	return 0;
 }
 
-int http_parse_get_value(fd_reader* fr, char* buf, int bufsize) {
+int http_parse_value(fd_reader* fr, char* buf, int bufsize) {
 	/* Key: value */
 	/*      ^     */
 	int state = hp_s_val;
@@ -354,14 +367,14 @@ int http_parse_get_value(fd_reader* fr, char* buf, int bufsize) {
 		{
 			if(c == '\r') {
 				need_read = 1;
-				state = hp_s_line_nl;
+				state = hp_s_line_lf;
 			}
 			else {
 				return -1;
 			}
 			break;
 		}
-		case hp_s_line_nl:
+		case hp_s_line_lf:
 		{
 			if(c == '\n') {
 				/* Key: value\r\n means parse succeeded */
@@ -377,14 +390,14 @@ int http_parse_get_value(fd_reader* fr, char* buf, int bufsize) {
 	}
 }
 
-void get_resource_path(char** path, char* url) {
+void get_resource_path(char** path, char* uri) {
 	int root_dir_len = strlen(RESOURCE_ROOT_DIR);
-	int url_len = strlen(url);
+	int url_len = strlen(uri);
 	int url_is_dir = 0;
 	int len = root_dir_len + url_len;
 
 	/* .../index.html */
-	if(url[strlen(url) - 1] == '/') {
+	if(uri[strlen(uri) - 1] == '/') {
 		url_is_dir = 1;
 		len += 10;
 	}
@@ -395,7 +408,7 @@ void get_resource_path(char** path, char* url) {
 		exit(-1);
 	}
 	strcpy(*path, RESOURCE_ROOT_DIR);
-	strcat(*path + root_dir_len, url);
+	strcat(*path + root_dir_len, uri);
 	if(url_is_dir)
 		strcat(*path + root_dir_len + url_len, "index.html");
 }

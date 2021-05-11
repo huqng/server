@@ -13,8 +13,8 @@ void help() {
         "    -e                | enable log_err (default = not)\n"
         "    -i                | enable log_info (default = not)\n"
         "    -h                | print this help\n"
-        "    -p <port>         | specify port (default = %d)\n"
-        "    -t <thread num>   | specify nth (Number of threads, default = %d)\n",
+        "    -p <port>         | Set port (default = %d)\n"
+        "    -t <thread num>   | Set nth (Number of threads, default = %d)\n",
         DEFAULT_PORT,
         DEFAULT_NTH
     );
@@ -72,7 +72,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    run_server(conf);
+    server_run(conf);
     free(conf);
     return 0;
 }
