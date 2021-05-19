@@ -188,7 +188,7 @@ int http_handle_get_1_0(int sock_fd, const char* filename, http_request_t* req) 
 			strcat(buf, filetype);
 		strcat(buf, rh_nl);
 		strcat(buf, rh_nl);
-		LOG_DEBUG("[buf content:]\n%s", buf);
+		//LOG_DEBUG("[buf content:]\n%s", buf);
 
 		int nsend = send(sock_fd, buf, strlen(buf), 0);
 		if(nsend < 0)
@@ -223,12 +223,14 @@ void* server_handle_request(void* arg){
 	LOG_DEBUG("Parsing http request");
 	int ret = http_parse_request(req);
 	if(ret  < 0){ 
-		close(req->fd);
+		close(fd);
 		free(req);
 		LOG_ERR("fail to parse http request");
 		return NULL;
 	}
-	LOG_DEBUG("succeed to parse http request [%d %s %d]", req->method, req->uri, req->version);
+	else {
+		LOG_DEBUG("succeed to parse http request [%d %s %d]", req->method, req->uri, req->version);
+	}
 
 	/* get filename from uri */
 	char* filename;
@@ -297,6 +299,7 @@ void* server_handle_request(void* arg){
 		tn->deleted = 0;;
 		tn->req = req;
 		gettimeofday(&tn->t, NULL);
+		req->tn = tn;
 		timer_queue_add(tq, tn);
 	}
 	

@@ -36,7 +36,8 @@ int http_parse_request(http_request_t* req) {
 	fd_reader* fr = (fd_reader*)malloc(sizeof(fd_reader));
 	int fr_ret = fr_init(fr, fd);
 	if(fr_ret < 0) {
-		LOG_ERR("fr_init failed: fd error");
+		LOG_ERR("fr_init failed: fd error[%d]", fr_ret);
+		free(fr);
 		return -2;
 	}
 	/* if state changed after reading(known by reading one byte), then don't need read again */

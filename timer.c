@@ -33,6 +33,7 @@ int timer_queue_add(timer_queue* tq, timer_node* tn) {
 	}
 	/* TODO - fix heap */
 	pthread_mutex_unlock(&tq_mutex);
+	LOG_DEBUG("A timer added");
 	return ret;
 }
 
@@ -40,6 +41,7 @@ int timer_queue_del_node(timer_node* tn) {
 	pthread_mutex_lock(&tq_mutex);
 	tn->deleted = 1;
 	pthread_mutex_unlock(&tq_mutex);
+	LOG_DEBUG("A timer tagged deleted");
 	return 0;
 }
 
@@ -59,8 +61,8 @@ int timer_queue_clean(timer_queue* tq) {
 	while(!timer_queue_empty(tq)) {
 		double t = timeval_to_ms(&timer_queue_get_min(tq)->t);
 		if(t < t_lim) {
-			LOG_DEBUG("A timer deleted [time: lim] [%lf %lf]", t, t_lim);
 			timer_queue_del_min(tq);
+			LOG_DEBUG("A timer deleted [time: lim] [%lf %lf]", t, t_lim);
 		}
 		else
 			break;
@@ -86,10 +88,14 @@ int timer_queue_del_min(timer_queue* tq) {
 	else {
 		/* for those sockets which are timeout */
 		/* need to free request and close fd */
+		if(((http_request_t*)tn->req)->fd == 0) {
+			LOG_ERR("");
+		}
 		close(((http_request_t*)tn->req)->fd);
 		free(tn->req);
 		free(tn); 
 	}
+	/* A timenode deleted, fixing heap */
 	tq->n--;
 	tq->p[0] = tq->p[tq->n];
 	int i = 0;
@@ -135,5 +141,5 @@ int timeval_cmp_le(struct timeval* a, struct timeval* b) {
 }
 
 double timeval_to_ms(struct timeval* tv) {
-	return tv->tv_sec * 1000 + tv->tv_usec / 1000;
+	return tv->tv_sec * 1000 + (double)tv->tv_usec / 1000;
 }
